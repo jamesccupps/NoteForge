@@ -7,9 +7,19 @@ echo   NoteForge — Build Windows Installer
 echo ============================================
 echo.
 
+:: Prevent code signing (no certificate)
+set CSC_IDENTITY_AUTO_DISCOVERY=false
+set WIN_CSC_LINK=
+
+:: Clear corrupted signing cache if it exists
+if exist "%LOCALAPPDATA%\electron-builder\Cache\winCodeSign" (
+    echo Clearing signing cache...
+    rd /s /q "%LOCALAPPDATA%\electron-builder\Cache\winCodeSign" 2>nul
+)
+
 where node >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] Node.js is not installed or not in PATH.
+    echo [ERROR] Node.js is not installed.
     echo Download from https://nodejs.org/
     pause
     exit /b 1
@@ -29,8 +39,7 @@ call npx babel app.jsx --out-file app.js --presets=@babel/preset-react
 if %errorlevel% neq 0 (echo [ERROR] JSX compile failed. & pause & exit /b 1)
 echo.
 
-echo [3/3] Building installer...
-echo   This may take a few minutes on first run.
+echo [3/3] Building installer and portable exe...
 call npx electron-builder --win
 if %errorlevel% neq 0 (echo [ERROR] Build failed. & pause & exit /b 1)
 echo.
@@ -38,8 +47,9 @@ echo.
 echo ============================================
 echo   Build complete!
 echo.
-echo   Installer: dist\NoteForge Setup *.exe
-echo   Portable:  dist\NoteForge-*-portable.exe
+echo   Look in the dist\ folder for:
+echo     - NoteForge Setup x.x.x.exe  (installer)
+echo     - NoteForge-x.x.x-portable.exe
 echo ============================================
 echo.
 

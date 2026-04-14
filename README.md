@@ -23,28 +23,30 @@
 
 Download the latest installer from [Releases](../../releases):
 
-- **`NoteForge-Setup-x.x.x.exe`** — Standard Windows installer (recommended)
+- **`NoteForge Setup x.x.x.exe`** — Standard Windows installer (recommended)
 - **`NoteForge-x.x.x-portable.exe`** — Portable version, no install needed
+
+Releases are built automatically by GitHub Actions — no manual build steps required.
 
 ### Build from Source
 
 Requires [Node.js](https://nodejs.org/) 18+.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/NoteForge.git
+git clone https://github.com/jamesccupps/NoteForge.git
 cd NoteForge
 npm install
 npm run build:jsx
 npm start
 ```
 
-To build the installer:
+To build the installer locally (or use `Build.bat` on Windows):
 
 ```bash
 npm run dist
 ```
 
-Output goes to `dist/`. The installer and portable exe will be in there.
+Output goes to `dist/`.
 
 ## Security
 
@@ -90,6 +92,9 @@ All scripts and fonts loaded from local `lib/` directory. Zero CDN dependencies 
 
 ```
 NoteForge/
+├── .github/
+│   └── workflows/
+│       └── build.yml        # CI: auto-build on tag push
 ├── app.jsx           # React source (edit this)
 ├── app.js            # Compiled output (generated)
 ├── main.js           # Electron main process + crypto

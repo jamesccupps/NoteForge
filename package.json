@@ -7,23 +7,22 @@
     "name": "James Cupps"
   },
   "license": "MIT",
-  "homepage": "https://github.com/JamesCupps/NoteForge",
+  "homepage": "https://github.com/jamesccupps/NoteForge",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JamesCupps/NoteForge.git"
+    "url": "https://github.com/jamesccupps/NoteForge.git"
   },
   "scripts": {
     "start": "electron .",
     "build:jsx": "babel app.jsx --out-file app.js --presets=@babel/preset-react",
     "predist": "npm run build:jsx",
-    "dist": "electron-builder --win",
-    "dist:portable": "electron-builder --win portable",
-    "dist:all": "electron-builder --win nsis portable"
+    "dist": "electron-builder --win"
   },
   "build": {
     "appId": "com.jamescupps.noteforge",
     "productName": "NoteForge",
     "copyright": "Copyright © 2026 James Cupps",
+    "forceCodeSigning": false,
     "directories": {
       "output": "dist"
     },
@@ -40,18 +39,16 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         },
         {
           "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false,
+      "sign": null
     },
     "nsis": {
       "oneClick": false,
@@ -69,8 +66,8 @@
     }
   },
   "devDependencies": {
-    "@babel/cli": "^7.28.6",
-    "@babel/preset-react": "^7.28.5",
+    "@babel/cli": "^7.28.0",
+    "@babel/preset-react": "^7.28.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   }
