@@ -571,7 +571,7 @@ function createWindow() {
     ]},
     { label: "Help", submenu: [
       { label: "About NoteForge", click: () => dialog.showMessageBox(mainWindow, {
-        type: "info", title: "About NoteForge", message: "NoteForge v2.5.3",
+        type: "info", title: "About NoteForge", message: "NoteForge v2.5.4",
         detail: "Encrypted offline note-taking.\nAES-256-GCM · scrypt (N=65536)\nDerived key session · Auto-lock\n\nData: " + userDataPath,
       })},
     ]},
@@ -605,6 +605,8 @@ function saveConfig(cfg) {
 
 ipcMain.handle("get-config", async () => loadConfig());
 ipcMain.handle("set-config", async (_e, key, value) => {
+  const ALLOWED = new Set(["autoUpdate"]);
+  if (!ALLOWED.has(key)) return { error: "Unknown config key" };
   const cfg = loadConfig();
   cfg[key] = value;
   saveConfig(cfg);

@@ -66,7 +66,7 @@ Output goes to `dist/`.
 - Rate limiting with exponential backoff on failed password attempts (persisted across restarts)
 - Password strength enforcement: 10+ chars, 3/4 character classes, dictionary check against 160+ common passwords
 
-### Content Security Policy
+### Content Security Policy (Renderer)
 
 ```
 default-src 'none';
@@ -77,7 +77,9 @@ img-src 'self' data:;
 connect-src 'none';
 ```
 
-All scripts and fonts loaded from local `lib/` directory. Zero CDN dependencies at runtime. `connect-src 'none'` blocks any outbound fetch/XHR even if code is injected.
+All scripts and fonts loaded from local `lib/` directory. Zero CDN dependencies at runtime. `connect-src 'none'` blocks any outbound fetch/XHR from the renderer process, even if code is injected.
+
+**Note:** The auto-updater runs in the main process (not governed by the renderer's CSP) and makes a single HTTPS request to GitHub Releases on launch to check for new versions. This can be disabled in File → Settings.
 
 ### Additional Hardening
 
@@ -88,6 +90,8 @@ All scripts and fonts loaded from local `lib/` directory. Zero CDN dependencies 
 - DOMPurify sanitizes all note content on load and paste
 - Export dialogs warn about unencrypted output
 - Print dialogs warn for password-protected notebooks
+- Config keys allowlisted — renderer can only write known settings
+- CI actions pinned to commit SHAs to prevent supply-chain attacks
 
 ## Development
 
