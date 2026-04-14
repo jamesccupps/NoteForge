@@ -3,19 +3,21 @@ title NoteForge Builder
 cd /d "%~dp0"
 
 echo ============================================
-echo   NoteForge — Build Windows Installer
+echo   NoteForge — Build
+echo ============================================
+echo.
+echo   RECOMMENDED: Push a git tag to build the
+echo   installer via GitHub Actions:
+echo.
+echo     git tag v2.5.2
+echo     git push origin v2.5.2
+echo.
+echo   The installer will appear on the Releases
+echo   page automatically.
 echo ============================================
 echo.
 
-:: Prevent code signing (no certificate)
 set CSC_IDENTITY_AUTO_DISCOVERY=false
-set WIN_CSC_LINK=
-
-:: Clear corrupted signing cache if it exists
-if exist "%LOCALAPPDATA%\electron-builder\Cache\winCodeSign" (
-    echo Clearing signing cache...
-    rd /s /q "%LOCALAPPDATA%\electron-builder\Cache\winCodeSign" 2>nul
-)
 
 where node >nul 2>&1
 if %errorlevel% neq 0 (
@@ -26,33 +28,52 @@ if %errorlevel% neq 0 (
 )
 
 if not exist "node_modules" (
-    echo [1/3] Installing dependencies...
+    echo Installing dependencies...
     call npm install
     if %errorlevel% neq 0 (echo [ERROR] npm install failed. & pause & exit /b 1)
-) else (
-    echo [1/3] Dependencies OK.
 )
 echo.
 
-echo [2/3] Compiling JSX...
+echo Compiling JSX...
 call npx babel app.jsx --out-file app.js --presets=@babel/preset-react
 if %errorlevel% neq 0 (echo [ERROR] JSX compile failed. & pause & exit /b 1)
 echo.
 
-echo [3/3] Building installer and portable exe...
+echo Building installer (requires Developer Mode or Admin)...
+echo   Enable Developer Mode: Settings -^> System -^> For developers
+echo.
+
+:: Clear corrupted signing cache
+if exist "%LOCALAPPDATA%\electron-builder\Cache\winCodeSign" (
+    rd /s /q "%LOCALAPPDATA%\electron-builder\Cache\winCodeSign" 2>nul
+)
+
 call npx electron-builder --win
-if %errorlevel% neq 0 (echo [ERROR] Build failed. & pause & exit /b 1)
+if %errorlevel% neq 0 (
+    echo.
+    echo ============================================
+    echo   Local build failed.
+    echo.
+    echo   This usually means Developer Mode is not
+    echo   enabled. You have two options:
+    echo.
+    echo   1. Enable Developer Mode in Windows:
+    echo      Settings -^> System -^> For developers
+    echo      Then run Build.bat again.
+    echo.
+    echo   2. Use GitHub Actions instead (recommended):
+    echo      git tag v2.5.2
+    echo      git push origin v2.5.2
+    echo ============================================
+    pause
+    exit /b 1
+)
 echo.
 
 echo ============================================
 echo   Build complete!
-echo.
-echo   Look in the dist\ folder for:
-echo     - NoteForge Setup x.x.x.exe  (installer)
-echo     - NoteForge-x.x.x-portable.exe
+echo   Output: dist\
 echo ============================================
-echo.
-
 set /p open="Open dist folder? (Y/N): "
 if /i "%open%"=="Y" explorer "dist"
 pause

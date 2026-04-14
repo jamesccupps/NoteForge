@@ -571,7 +571,7 @@ function createWindow() {
     ]},
     { label: "Help", submenu: [
       { label: "About NoteForge", click: () => dialog.showMessageBox(mainWindow, {
-        type: "info", title: "About NoteForge", message: "NoteForge v2.5.1",
+        type: "info", title: "About NoteForge", message: "NoteForge v2.5.2",
         detail: "Encrypted offline note-taking.\nAES-256-GCM · scrypt (N=65536)\nDerived key session · Auto-lock\n\nData: " + userDataPath,
       })},
     ]},

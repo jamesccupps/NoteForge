@@ -1,6 +1,6 @@
 {
   "name": "noteforge",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "description": "Encrypted offline note-taking — a OneNote alternative that keeps your data local and protected.",
   "main": "main.js",
   "author": {
@@ -46,9 +46,7 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "assets/icon.ico",
-      "signAndEditExecutable": false,
-      "sign": null
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,
