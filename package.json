@@ -67,7 +67,8 @@
     "publish": {
       "provider": "github",
       "owner": "jamesccupps",
-      "repo": "NoteForge"
+      "repo": "NoteForge",
+      "releaseType": "release"
     }
   },
   "dependencies": {
