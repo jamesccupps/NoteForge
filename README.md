@@ -7,11 +7,12 @@
 - **3-panel layout** — Notebooks → Sections → Pages, just like OneNote
 - **AES-256-GCM encryption** — Master password encrypts all data at rest with scrypt key derivation (N=65536)
 - **Per-notebook locks** — Individual password for sensitive notebooks
-- **Fully offline** — Zero network requests. All fonts, scripts, and dependencies bundled locally
+- **Fully offline** — All fonts, scripts, and dependencies bundled locally. The only network request is an optional update check against GitHub Releases on launch
 - **Rich text editor** — Bold, italic, headings, lists, tables, code blocks, links, images, checklists
 - **Find & Replace** — Safe text-node walking that won't break HTML
 - **Auto-lock** — Configurable idle timeout (5/15/30/60 min) + Ctrl+L manual lock
 - **Encrypted backup** — Export/restore `.enc` backup files
+- **Auto-update** — Checks GitHub Releases on launch, downloads and installs updates seamlessly
 - **Dark & light themes** — Persisted across sessions
 - **Export** — HTML and plain text with unencrypted file warnings
 - **Content Security Policy** — `connect-src 'none'`, `script-src 'self'` — no eval, no outbound connections
@@ -27,6 +28,8 @@ Download the latest installer from [Releases](../../releases):
 - **`NoteForge-x.x.x-portable.exe`** — Portable version, no install needed
 
 Releases are built automatically by GitHub Actions — no manual build steps required.
+
+> **Note:** Windows may show a SmartScreen warning because the app isn't code-signed yet. Click **"More info"** → **"Run anyway"** to proceed. The source code is fully open for inspection.
 
 ### Build from Source
 
