@@ -1,6 +1,6 @@
 {
   "name": "noteforge",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Encrypted offline note-taking — a OneNote alternative that keeps your data local and protected.",
   "main": "main.js",
   "author": {
@@ -63,7 +63,15 @@
     },
     "portable": {
       "artifactName": "NoteForge-${version}-portable.exe"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "jamesccupps",
+      "repo": "NoteForge"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
   },
   "devDependencies": {
     "@babel/cli": "^7.28.0",

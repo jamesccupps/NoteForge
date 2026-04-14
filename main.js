@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, shell, dialog, ipcMain, session } = require("e
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const { autoUpdater } = require("electron-updater");
 
 let mainWindow;
 const userDataPath = app.getPath("userData");
@@ -570,7 +571,7 @@ function createWindow() {
     ]},
     { label: "Help", submenu: [
       { label: "About NoteForge", click: () => dialog.showMessageBox(mainWindow, {
-        type: "info", title: "About NoteForge", message: "NoteForge v2.5.0",
+        type: "info", title: "About NoteForge", message: "NoteForge v2.5.1",
         detail: "Encrypted offline note-taking.\nAES-256-GCM · scrypt (N=65536)\nDerived key session · Auto-lock\n\nData: " + userDataPath,
       })},
     ]},
@@ -579,6 +580,65 @@ function createWindow() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  setupAutoUpdater();
+});
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (!mainWindow) createWindow(); });
+
+/* ═══════════════════════════════════════════════════════════════
+   AUTO-UPDATER — checks GitHub Releases on startup
+   Only network activity the app makes. Everything else stays offline.
+   ═══════════════════════════════════════════════════════════════ */
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+function setupAutoUpdater() {
+  if (IS_DEV) return; // don't check for updates in dev mode
+
+  // Check for updates 5 seconds after launch (non-blocking)
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch(() => {}); // silently fail if offline
+  }, 5000);
+
+  autoUpdater.on("update-available", (info) => {
+    if (!mainWindow) return;
+    dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "Update Available",
+      message: `NoteForge ${info.version} is available.`,
+      detail: "Would you like to download it? The update will be installed when you close the app.",
+      buttons: ["Download", "Later"],
+      defaultId: 0,
+    }).then(result => {
+      if (result.response === 0) {
+        autoUpdater.downloadUpdate();
+        mainWindow?.webContents.send("menu-action", "update-downloading");
+      }
+    });
+  });
+
+  autoUpdater.on("update-downloaded", () => {
+    if (!mainWindow) return;
+    dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "Update Ready",
+      message: "Update downloaded. It will be installed when you quit NoteForge.",
+      buttons: ["Restart Now", "Later"],
+      defaultId: 0,
+    }).then(result => {
+      if (result.response === 0) autoUpdater.quitAndInstall();
+    });
+  });
+
+  autoUpdater.on("error", () => {}); // silently ignore update errors (offline, etc.)
+}
+
+ipcMain.handle("check-for-updates", async () => {
+  if (IS_DEV) return { update: false };
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { update: !!result?.updateInfo, version: result?.updateInfo?.version };
+  } catch { return { update: false }; }
+});
