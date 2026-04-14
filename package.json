@@ -1,6 +1,6 @@
 {
   "name": "noteforge",
-  "version": "2.5.2",
+  "version": "2.5.3",
   "description": "Encrypted offline note-taking — a OneNote alternative that keeps your data local and protected.",
   "main": "main.js",
   "author": {
@@ -39,11 +39,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico"
@@ -73,8 +77,8 @@
     "electron-updater": "^6.3.0"
   },
   "devDependencies": {
-    "@babel/cli": "^7.28.0",
-    "@babel/preset-react": "^7.28.0",
+    "@babel/cli": "^7.28.6",
+    "@babel/preset-react": "^7.28.5",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   }

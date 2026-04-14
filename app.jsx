@@ -337,7 +337,8 @@ function NoteForge(){
   const [masterHint,setMasterHint]=useState(null);
   const [pwDialog,setPwDialog]=useState(null); // null | {type,nbId,...}
   const [pwError,setPwError]=useState("");
-  const [unlockedNbs,setUnlockedNbs]=useState(new Set()); // notebook IDs unlocked this session
+  const [unlockedNbs,setUnlockedNbs]=useState(new Set());
+  const [autoUpdate,setAutoUpdate]=useState(true); // loaded from config // notebook IDs unlocked this session
 
   const edRef=useRef(null);
   const saveTimer=useRef(null);
@@ -425,6 +426,11 @@ function NoteForge(){
   /* ── Load (encryption-aware) ─────────────────────────────── */
   useEffect(()=>{
     (async()=>{
+      // Load config
+      if(window.electronAPI?.getConfig){
+        const cfg=await window.electronAPI.getConfig();
+        if(cfg.autoUpdate!==undefined)setAutoUpdate(cfg.autoUpdate);
+      }
       if(hasElectronCrypto()){
         const status=await window.electronAPI.checkEncryption();
         setEncEnabled(status.encrypted);
@@ -870,10 +876,10 @@ function NoteForge(){
   {pwDialog?.type==="enc-settings"&&<div className="nf-overlay" style={tv} onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>
     <div className="nf-overlay-card">
       <div style={{marginBottom:16}}><I n="shield" s={32}/></div>
-      <div className="nf-overlay-title">Encryption Settings</div>
-      <div className="nf-overlay-sub">AES-256-GCM encryption for all your notes.</div>
+      <div className="nf-overlay-title">Settings</div>
+      <div className="nf-overlay-sub">Encryption, auto-lock, and updates.</div>
       <div style={{textAlign:"left",fontSize:13,marginBottom:16,padding:"10px 12px",background:"var(--surface-alt)",borderRadius:8}}>
-        Status: <strong style={{color:encEnabled?"var(--success)":"var(--text-muted)"}}>{encEnabled?"Encrypted":"Not encrypted"}</strong>
+        Encryption: <strong style={{color:encEnabled?"var(--success)":"var(--text-muted)"}}>{encEnabled?"Enabled (AES-256-GCM)":"Not enabled"}</strong>
       </div>
       {encEnabled&&<div style={{textAlign:"left",fontSize:13,marginBottom:16,padding:"10px 12px",background:"var(--surface-alt)",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
         <span>Auto-lock after</span>
@@ -886,6 +892,21 @@ function NoteForge(){
         </select>
         <span style={{fontSize:11,color:"var(--text-muted)"}}>of inactivity</span>
       </div>}
+      <div style={{textAlign:"left",fontSize:13,marginBottom:16,padding:"10px 12px",background:"var(--surface-alt)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div>Auto-update</div>
+          <div style={{fontSize:11,color:"var(--text-muted)"}}>Check GitHub for new versions on launch</div>
+        </div>
+        <label style={{position:"relative",width:40,height:22,flexShrink:0,cursor:"pointer"}}>
+          <input type="checkbox" checked={autoUpdate} onChange={async e=>{
+            const val=e.target.checked;setAutoUpdate(val);
+            if(window.electronAPI?.setConfig)await window.electronAPI.setConfig("autoUpdate",val);
+          }} style={{opacity:0,width:0,height:0}}/>
+          <span style={{position:"absolute",inset:0,borderRadius:11,background:autoUpdate?"var(--accent)":"var(--border)",transition:"background .2s"}}>
+            <span style={{position:"absolute",top:2,left:autoUpdate?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+          </span>
+        </label>
+      </div>
       {!encEnabled&&<button className="nf-overlay-btn primary" onClick={()=>setPwDialog({type:"enable-enc"})}>Enable Encryption</button>}
       {encEnabled&&<>
         <button className="nf-overlay-btn primary" onClick={()=>setPwDialog({type:"change-pw"})}>Change Password</button>

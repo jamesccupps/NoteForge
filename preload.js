@@ -20,6 +20,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Backup
   exportBackup: () => ipcRenderer.invoke("export-backup"),
   restoreBackup: () => ipcRenderer.invoke("restore-backup"),
+  // Config
+  getConfig: () => ipcRenderer.invoke("get-config"),
+  setConfig: (key, value) => ipcRenderer.invoke("set-config", key, value),
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
   // Export / Print
   exportHTML: (title, html) => ipcRenderer.invoke("export-html", title, html),
   exportText: (title, text) => ipcRenderer.invoke("export-text", title, text),

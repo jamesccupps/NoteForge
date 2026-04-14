@@ -544,7 +544,7 @@ function createWindow() {
       { label: "Backup Encrypted Data…", click: send("export-backup") },
       { label: "Restore from Backup…", click: send("restore-backup") },
       { type: "separator" },
-      { label: "Encryption Settings…", click: send("encryption-settings") },
+      { label: "Settings…", click: send("encryption-settings") },
       { label: "Lock App", accelerator: "CmdOrCtrl+L", click: send("lock-app") },
       { type: "separator" },
       { label: "Open Data Folder", click: send("open-data-folder") },
@@ -571,7 +571,7 @@ function createWindow() {
     ]},
     { label: "Help", submenu: [
       { label: "About NoteForge", click: () => dialog.showMessageBox(mainWindow, {
-        type: "info", title: "About NoteForge", message: "NoteForge v2.5.2",
+        type: "info", title: "About NoteForge", message: "NoteForge v2.5.3",
         detail: "Encrypted offline note-taking.\nAES-256-GCM · scrypt (N=65536)\nDerived key session · Auto-lock\n\nData: " + userDataPath,
       })},
     ]},
@@ -589,17 +589,39 @@ app.on("activate", () => { if (!mainWindow) createWindow(); });
 
 /* ═══════════════════════════════════════════════════════════════
    AUTO-UPDATER — checks GitHub Releases on startup
-   Only network activity the app makes. Everything else stays offline.
+   Only network activity the app makes. Can be disabled in settings.
    ═══════════════════════════════════════════════════════════════ */
+const configFile = path.join(userDataPath, "noteforge-config.json");
+
+function loadConfig() {
+  try {
+    if (fs.existsSync(configFile)) return JSON.parse(fs.readFileSync(configFile, "utf-8"));
+  } catch {}
+  return { autoUpdate: true };
+}
+function saveConfig(cfg) {
+  try { fs.writeFileSync(configFile, JSON.stringify(cfg), "utf-8"); } catch {}
+}
+
+ipcMain.handle("get-config", async () => loadConfig());
+ipcMain.handle("set-config", async (_e, key, value) => {
+  const cfg = loadConfig();
+  cfg[key] = value;
+  saveConfig(cfg);
+  return cfg;
+});
+
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
 function setupAutoUpdater() {
-  if (IS_DEV) return; // don't check for updates in dev mode
+  if (IS_DEV) return;
+  const cfg = loadConfig();
+  if (!cfg.autoUpdate) return; // user disabled auto-update
 
   // Check for updates 5 seconds after launch (non-blocking)
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {}); // silently fail if offline
+    autoUpdater.checkForUpdates().catch(() => {});
   }, 5000);
 
   autoUpdater.on("update-available", (info) => {
@@ -632,7 +654,7 @@ function setupAutoUpdater() {
     });
   });
 
-  autoUpdater.on("error", () => {}); // silently ignore update errors (offline, etc.)
+  autoUpdater.on("error", () => {});
 }
 
 ipcMain.handle("check-for-updates", async () => {
