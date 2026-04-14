@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+dist/
+out/
+release/
+
+# Compiled JS (generated from app.jsx — don't edit directly)
+# Uncomment the line below if you want to track only the source
+# app.js
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Electron
+*.asar
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
