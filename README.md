@@ -18,6 +18,10 @@
 - **Content Security Policy** — `connect-src 'none'`, `script-src 'self'` — no eval, no outbound connections
 - **DOMPurify** — All note content sanitized against XSS on load and paste
 
+## Screenshots
+
+<img width="2080" height="1334" alt="image" src="https://github.com/user-attachments/assets/e73ca6b5-87e7-41b5-92c1-422079512ae0" />
+
 ## Install
 
 ### Download (Windows)
