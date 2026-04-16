@@ -49,9 +49,25 @@ function encryptData(plaintext, password) {
 }
 
 // Full decrypt (for initial unlock, password verification)
+// SECURITY: Enforces minimum KDF parameters to prevent downgrade attacks where
+// an attacker swaps in a weakened header with low N/r/p values.
+const MIN_SCRYPT_N = 16384;  // legacy v1 floor; never accept weaker
+const MIN_SCRYPT_R = 8;
+const MIN_SCRYPT_P = 1;
+const MAX_SCRYPT_N = 1 << 20; // sanity cap — prevents DoS via huge N
 function decryptData(encJson, password) {
   const obj = JSON.parse(encJson);
   const N = obj.N || 16384, r = obj.r || 8, p = obj.p || 1;
+  // Reject weakened or malformed KDF parameters
+  if (N < MIN_SCRYPT_N || N > MAX_SCRYPT_N) throw new Error("Invalid KDF parameters (N)");
+  if (r < MIN_SCRYPT_R) throw new Error("Invalid KDF parameters (r)");
+  if (p < MIN_SCRYPT_P) throw new Error("Invalid KDF parameters (p)");
+  if ((N & (N - 1)) !== 0) throw new Error("Invalid KDF parameters (N must be power of 2)");
+  // Validate field shapes before feeding to crypto APIs
+  if (typeof obj.salt !== "string" || typeof obj.iv !== "string" ||
+      typeof obj.tag !== "string" || typeof obj.data !== "string") {
+    throw new Error("Malformed encrypted blob");
+  }
   const salt = Buffer.from(obj.salt, "hex");
   const key = deriveKey(password, salt, N, r, p);
   const decipher = crypto.createDecipheriv(ALGO, key, Buffer.from(obj.iv, "hex"));
@@ -65,6 +81,7 @@ function decryptData(encJson, password) {
 /* ── Session key (derived key stored instead of password) ───── */
 let sessionKey = null;   // Buffer — can be zeroed
 let sessionSalt = null;  // Buffer — for re-encryptions
+const nbSessionKeys = new Map(); // nbKeyId -> { key: Buffer, salt: Buffer }
 
 function encryptWithSession(plaintext) {
   if (!sessionKey) throw new Error("No session key");
@@ -93,6 +110,9 @@ function decryptWithSession(encJson) {
 function lockSession() {
   if (sessionKey) { sessionKey.fill(0); sessionKey = null; }
   sessionSalt = null;
+  // Zero all per-notebook session keys
+  for (const entry of nbSessionKeys.values()) entry.key.fill(0);
+  nbSessionKeys.clear();
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -379,7 +399,16 @@ ipcMain.handle("lock-app", async () => { lockSession(); return { success: true }
 ipcMain.handle("encrypt-notebook-sections", async (_e, json, password) => {
   const strengthErr = checkPasswordStrength(password);
   if (strengthErr) return { error: strengthErr };
-  try { return { success: true, blob: encryptData(json, password) }; }
+  try {
+    const blob = encryptData(json, password);
+    // Cache session key derived from the fresh blob's salt so renderer doesn't have to re-derive per edit
+    const obj = JSON.parse(blob);
+    const salt = Buffer.from(obj.salt, "hex");
+    const key = deriveKey(password, salt);
+    const nbKeyId = crypto.randomBytes(16).toString("hex");
+    nbSessionKeys.set(nbKeyId, { key, salt });
+    return { success: true, blob, nbKeyId };
+  }
   catch (e) { return { error: e.message }; }
 });
 
@@ -388,10 +417,38 @@ ipcMain.handle("decrypt-notebook-sections", async (_e, blob, password) => {
   if (rlErr) return { error: rlErr };
   try {
     const result = decryptData(blob, password);
-    result.key.fill(0);
     recordNbSuccess();
-    return { success: true, sections: result.plaintext };
+    // Cache the derived key under a random handle so renderer holds only a handle, not the password
+    const nbKeyId = crypto.randomBytes(16).toString("hex");
+    nbSessionKeys.set(nbKeyId, { key: result.key, salt: result.salt });
+    return { success: true, sections: result.plaintext, nbKeyId };
   } catch (e) { recordNbFailure(); return { error: "Wrong password" }; }
+});
+
+// Re-encrypt using a cached notebook session key (called on every edit save)
+// Password never leaves the main process; derivation happens once per unlock.
+ipcMain.handle("reencrypt-notebook-sections", async (_e, json, nbKeyId) => {
+  const entry = nbSessionKeys.get(nbKeyId);
+  if (!entry) return { error: "Session key expired — please unlock the notebook again" };
+  try {
+    const iv = crypto.randomBytes(IV_LEN);
+    const cipher = crypto.createCipheriv(ALGO, entry.key, iv);
+    let enc = cipher.update(json, "utf-8", "base64");
+    enc += cipher.final("base64");
+    const tag = cipher.getAuthTag();
+    const blob = JSON.stringify({
+      v: 2, kdf: "scrypt", N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P,
+      salt: entry.salt.toString("hex"), iv: iv.toString("hex"),
+      tag: tag.toString("hex"), data: enc,
+    });
+    return { success: true, blob };
+  } catch (e) { return { error: e.message }; }
+});
+
+ipcMain.handle("forget-notebook-key", async (_e, nbKeyId) => {
+  const entry = nbSessionKeys.get(nbKeyId);
+  if (entry) { entry.key.fill(0); nbSessionKeys.delete(nbKeyId); }
+  return { success: true };
 });
 
 /* ═══════════════════════════════════════════════════════════════
@@ -399,6 +456,20 @@ ipcMain.handle("decrypt-notebook-sections", async (_e, blob, password) => {
    ═══════════════════════════════════════════════════════════════ */
 ipcMain.handle("export-backup", async () => {
   if (!fs.existsSync(encFile)) return { error: "No encrypted data to backup. Enable encryption first." };
+  const hasHint = fs.existsSync(hintFile);
+  let includeHint = false;
+  if (hasHint) {
+    const hintChoice = await dialog.showMessageBox(mainWindow, {
+      type: "question",
+      title: "Include Password Hint?",
+      message: "Your password hint is stored alongside your data.",
+      detail: "The hint is NOT encrypted. Including it in the backup means anyone who obtains the backup file can read the hint. Only include it if you're storing the backup somewhere trusted.",
+      buttons: ["Include Hint", "Exclude Hint", "Cancel"],
+      defaultId: 1, cancelId: 2,
+    });
+    if (hintChoice.response === 2) return { canceled: true };
+    includeHint = hintChoice.response === 0;
+  }
   const result = await dialog.showSaveDialog(mainWindow, {
     defaultPath: `NoteForge-Backup-${new Date().toISOString().slice(0,10)}.enc`,
     filters: [{ name: "NoteForge Encrypted Backup", extensions: ["enc"] }],
@@ -406,8 +477,7 @@ ipcMain.handle("export-backup", async () => {
   if (result.canceled || !result.filePath) return { canceled: true };
   try {
     fs.copyFileSync(encFile, result.filePath);
-    // Include hint if exists
-    if (fs.existsSync(hintFile)) {
+    if (includeHint && hasHint) {
       fs.writeFileSync(result.filePath + ".hint", fs.readFileSync(hintFile, "utf-8"), "utf-8");
     }
     return { success: true, path: result.filePath };
@@ -429,10 +499,12 @@ ipcMain.handle("restore-backup", async () => {
   if (result.canceled || !result.filePaths.length) return { canceled: true };
   try {
     const src = result.filePaths[0];
-    // Validate it's actually encrypted data
+    // Validate it's actually encrypted data — reject anything that isn't a v2 scrypt blob
     const raw = fs.readFileSync(src, "utf-8");
     const obj = JSON.parse(raw);
     if (!obj.data || !obj.salt || !obj.iv || !obj.tag) return { error: "Invalid backup file" };
+    if (obj.v !== 2 || obj.kdf !== "scrypt") return { error: "Unsupported backup format" };
+    if (typeof obj.N !== "number" || obj.N < MIN_SCRYPT_N) return { error: "Backup uses weakened encryption" };
     fs.copyFileSync(src, encFile);
     // Restore hint if exists
     if (fs.existsSync(src + ".hint")) {
@@ -448,11 +520,16 @@ ipcMain.handle("restore-backup", async () => {
 /* ═══════════════════════════════════════════════════════════════
    IPC: EXPORT / PRINT
    ═══════════════════════════════════════════════════════════════ */
-ipcMain.handle("export-html", async (_e, title, html) => {
+ipcMain.handle("export-html", async (_e, title, html, isLocked) => {
   const warn = await dialog.showMessageBox(mainWindow, {
-    type: "warning", title: "Export Unencrypted",
-    message: "The exported file will NOT be encrypted.",
-    detail: "Anyone with access to the file can read its contents.",
+    type: "warning",
+    title: isLocked ? "Export Password-Protected Page" : "Export Unencrypted",
+    message: isLocked
+      ? "This page belongs to a PASSWORD-PROTECTED notebook."
+      : "The exported file will NOT be encrypted.",
+    detail: isLocked
+      ? "Exporting will create a plaintext HTML file that bypasses your notebook password. Anyone with access to the file can read its contents. Continue?"
+      : "Anyone with access to the file can read its contents.",
     buttons: ["Export Anyway", "Cancel"], defaultId: 1, cancelId: 1,
   });
   if (warn.response !== 0) return false;
@@ -467,11 +544,16 @@ ipcMain.handle("export-html", async (_e, title, html) => {
   return true;
 });
 
-ipcMain.handle("export-text", async (_e, title, text) => {
+ipcMain.handle("export-text", async (_e, title, text, isLocked) => {
   const warn = await dialog.showMessageBox(mainWindow, {
-    type: "warning", title: "Export Unencrypted",
-    message: "The exported file will NOT be encrypted.",
-    detail: "Anyone with access to the file can read its contents.",
+    type: "warning",
+    title: isLocked ? "Export Password-Protected Page" : "Export Unencrypted",
+    message: isLocked
+      ? "This page belongs to a PASSWORD-PROTECTED notebook."
+      : "The exported file will NOT be encrypted.",
+    detail: isLocked
+      ? "Exporting will create a plaintext file that bypasses your notebook password. Continue?"
+      : "Anyone with access to the file can read its contents.",
     buttons: ["Export Anyway", "Cancel"], defaultId: 1, cancelId: 1,
   });
   if (warn.response !== 0) return false;
@@ -505,10 +587,16 @@ ipcMain.handle("open-data-folder", async () => { shell.openPath(userDataPath); }
    ═══════════════════════════════════════════════════════════════ */
 function createWindow() {
   const ws = loadWindowState();
+  // Prefer .ico on Windows, .png elsewhere. Works in dev (unpacked) and after electron-builder packages
+  // because the assets/ folder is in the `files` allowlist in package.json.
+  const iconPath = process.platform === "win32"
+    ? path.join(__dirname, "assets", "icon.ico")
+    : path.join(__dirname, "assets", "icon.png");
   mainWindow = new BrowserWindow({
     width: ws.width, height: ws.height, x: ws.x, y: ws.y,
     minWidth: 700, minHeight: 500, title: "NoteForge",
     backgroundColor: "#0e0e16", show: false,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true, nodeIntegration: false,
@@ -571,7 +659,7 @@ function createWindow() {
     ]},
     { label: "Help", submenu: [
       { label: "About NoteForge", click: () => dialog.showMessageBox(mainWindow, {
-        type: "info", title: "About NoteForge", message: "NoteForge v2.5.4",
+        type: "info", title: "About NoteForge", message: "NoteForge v2.6.1",
         detail: "Encrypted offline note-taking.\nAES-256-GCM · scrypt (N=65536)\nDerived key session · Auto-lock\n\nData: " + userDataPath,
       })},
     ]},
@@ -581,6 +669,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Windows: set AppUserModelID so the taskbar groups the window under NoteForge
+  // with the correct icon instead of under generic "Electron"
+  if (process.platform === "win32") app.setAppUserModelId("com.jamescupps.noteforge");
   createWindow();
   setupAutoUpdater();
 });

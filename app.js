@@ -1078,7 +1078,7 @@ function NoteForge() {
   aNbRef.current = aNb;
   const aSecRef = useRef(null);
   aSecRef.current = aSec;
-  const nbPasswords = useRef(new Map());
+  const nbKeys = useRef(new Map()); // nbId -> opaque nbKeyId (main-process session key handle)
   const [autoLockMin, setAutoLockMin] = useState(savedPrefs.current.autoLockMin || 15);
   useEffect(() => {
     prefsStore.save({
@@ -1100,7 +1100,7 @@ function NoteForge() {
       await store.set(JSON.stringify(sanitized));
     }
     if (window.electronAPI?.lockApp) await window.electronAPI.lockApp();
-    nbPasswords.current.clear();
+    nbKeys.current.clear();
     dataRef.current = null;
     setData(null);
     setANb(null);
@@ -1222,12 +1222,13 @@ function NoteForge() {
     saveTimer.current = setTimeout(async () => {
       let toSave = nd;
       // Step 1: Re-encrypt sections for any locked+unlocked-in-session notebooks
-      // so edits are captured in the encrypted blob before we strip plaintext
+      // so edits are captured in the encrypted blob before we strip plaintext.
+      // Uses cached main-process session key — no scrypt on the hot path.
       if (hasElectronCrypto()) {
         const nbs = await Promise.all(nd.notebooks.map(async nb => {
-          if (nb.locked && nb.sections?.length > 0 && nbPasswords.current.has(nb.id)) {
-            const pw = nbPasswords.current.get(nb.id);
-            const r = await window.electronAPI.encryptNotebookSections(JSON.stringify(nb.sections), pw);
+          if (nb.locked && nb.sections?.length > 0 && nbKeys.current.has(nb.id)) {
+            const nbKeyId = nbKeys.current.get(nb.id);
+            const r = await window.electronAPI.reencryptNotebookSections(JSON.stringify(nb.sections), nbKeyId);
             if (r.success) return {
               ...nb,
               encSections: r.blob
@@ -1711,7 +1712,9 @@ function NoteForge() {
       ...d,
       notebooks: d.notebooks.filter(n => n.id !== nid)
     });
-    nbPasswords.current.delete(nid);
+    const keyId = nbKeys.current.get(nid);
+    if (keyId && window.electronAPI?.forgetNotebookKey) window.electronAPI.forgetNotebookKey(keyId);
+    nbKeys.current.delete(nid);
     if (aNb === nid) {
       setANb(null);
       setASec(null);
@@ -1733,7 +1736,8 @@ function NoteForge() {
     if (!r.success) return {
       error: r.error
     };
-    nbPasswords.current.set(nbId, password);
+    // Store only the opaque handle to the main-process session key. Password is discarded here.
+    if (r.nbKeyId) nbKeys.current.set(nbId, r.nbKeyId);
     // Keep sections in memory (user still has access this session).
     // sanitizeForDiskSync() strips them before every write — plaintext never reaches disk.
     const nd = {
@@ -1767,7 +1771,7 @@ function NoteForge() {
     };
     try {
       const sections = JSON.parse(r.sections);
-      nbPasswords.current.set(nbId, password);
+      if (r.nbKeyId) nbKeys.current.set(nbId, r.nbKeyId);
       const nd = {
         ...d,
         notebooks: d.notebooks.map(n => n.id !== nbId ? n : {
@@ -1809,7 +1813,9 @@ function NoteForge() {
       })
     };
     persist(nd);
-    nbPasswords.current.delete(nbId);
+    const keyId = nbKeys.current.get(nbId);
+    if (keyId && window.electronAPI?.forgetNotebookKey) window.electronAPI.forgetNotebookKey(keyId);
+    nbKeys.current.delete(nbId);
     setUnlockedNbs(p => {
       const s = new Set(p);
       s.delete(nbId);
@@ -1892,8 +1898,12 @@ function NoteForge() {
   /* ═══ Export ═══════════════════════════════════════════════ */
   const doExportHTML = async () => {
     if (!curPage) return;
-    if (window.electronAPI) await window.electronAPI.exportHTML(curPage.title, curPage.content);else {
-      const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(curPage.title)}</title><style>body{font-family:'DM Sans',sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1a1a1a}h1,h2,h3,h4{margin:.5em 0 .3em}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}pre{background:#f5f5f5;padding:14px;border-radius:8px;overflow-x:auto}code{background:#f5f5f5;padding:2px 6px;border-radius:4px}blockquote{border-left:3px solid #6359d0;padding-left:14px;opacity:.85}</style></head><body>${curPage.content}</body></html>`;
+    // Re-sanitize on export — storage may contain pre-DOMPurify HTML from older versions
+    const cleanHTML = sanitizeHTML(curPage.content || "");
+    const parentNb = aNb ? dataRef.current?.notebooks.find(n => n.id === aNb) : null;
+    const isLocked = !!parentNb?.locked;
+    if (window.electronAPI) await window.electronAPI.exportHTML(curPage.title, cleanHTML, isLocked);else {
+      const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(curPage.title)}</title><style>body{font-family:'DM Sans',sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1a1a1a}h1,h2,h3,h4{margin:.5em 0 .3em}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}pre{background:#f5f5f5;padding:14px;border-radius:8px;overflow-x:auto}code{background:#f5f5f5;padding:2px 6px;border-radius:4px}blockquote{border-left:3px solid #6359d0;padding-left:14px;opacity:.85}</style></head><body>${cleanHTML}</body></html>`;
       const b = new Blob([doc], {
         type: "text/html"
       });
@@ -1907,7 +1917,9 @@ function NoteForge() {
   const doExportText = async () => {
     if (!curPage || !edRef.current) return;
     const text = edRef.current.innerText;
-    if (window.electronAPI) await window.electronAPI.exportText(curPage.title, text);else {
+    const parentNb = aNb ? dataRef.current?.notebooks.find(n => n.id === aNb) : null;
+    const isLocked = !!parentNb?.locked;
+    if (window.electronAPI) await window.electronAPI.exportText(curPage.title, text, isLocked);else {
       const b = new Blob([text], {
         type: "text/plain"
       });
@@ -2405,24 +2417,33 @@ function NoteForge() {
           });
           return;
         }
+        const switchingNb = aNb !== nb.id;
         setANb(nb.id);
-        setExpNb(p => ({
-          ...p,
-          [nb.id]: !p[nb.id]
-        }));
-        if (!expNb[nb.id]) {
+        setShowTrash(false);
+        if (switchingNb) {
+          // Switched to a different notebook — sync sec/page panes, don't leave stale state
+          setPgFilter("");
           const sec = nb.sections?.[0];
           if (sec) {
             setASec(sec.id);
-            setPgFilter("");
             const pg = sec.pages.find(p => !p.deleted);
             setAPg(pg?.id || null);
           } else {
             setASec(null);
             setAPg(null);
           }
+          // Force expand on switch so the user immediately sees the notebook's sections
+          setExpNb(p => ({
+            ...p,
+            [nb.id]: true
+          }));
+        } else {
+          // Same notebook clicked — just toggle expand, keep current section/page
+          setExpNb(p => ({
+            ...p,
+            [nb.id]: !p[nb.id]
+          }));
         }
-        setShowTrash(false);
       },
       onContextMenu: e => {
         e.preventDefault();

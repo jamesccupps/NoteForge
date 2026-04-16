@@ -1,16 +1,17 @@
 @echo off
+chcp 65001 >nul
 title NoteForge Builder
 cd /d "%~dp0"
 
 echo ============================================
-echo   NoteForge — Build
+echo   NoteForge - Build
 echo ============================================
 echo.
 echo   RECOMMENDED: Push a git tag to build the
 echo   installer via GitHub Actions:
 echo.
-echo     git tag v2.5.2
-echo     git push origin v2.5.2
+echo     git tag v2.6.1
+echo     git push origin v2.6.1
 echo.
 echo   The installer will appear on the Releases
 echo   page automatically.
@@ -29,7 +30,7 @@ if %errorlevel% neq 0 (
 
 if not exist "node_modules" (
     echo Installing dependencies...
-    call npm install
+    call npm install --no-audit --no-fund --loglevel=error
     if %errorlevel% neq 0 (echo [ERROR] npm install failed. & pause & exit /b 1)
 )
 echo.
@@ -62,8 +63,8 @@ if %errorlevel% neq 0 (
     echo      Then run Build.bat again.
     echo.
     echo   2. Use GitHub Actions instead (recommended):
-    echo      git tag v2.5.2
-    echo      git push origin v2.5.2
+    echo      git tag v2.6.1
+    echo      git push origin v2.6.1
     echo ============================================
     pause
     exit /b 1
