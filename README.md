@@ -37,7 +37,7 @@ Releases are built automatically by GitHub Actions — no manual build steps req
 
 ### Build from Source
 
-Requires [Node.js](https://nodejs.org/) 18+.
+Requires [Node.js](https://nodejs.org/) 20 LTS or 22 LTS. Node 22 is recommended (Electron's `@electron/*` packages are bumping to Node 22 as the new minimum).
 
 ```bash
 git clone https://github.com/jamesccupps/NoteForge.git
@@ -65,10 +65,12 @@ Output goes to `dist/`.
 | Notebook locks | AES-256-GCM | scrypt N=65536, r=8, p=1 |
 
 - Master password is **never stored** — only the derived key (Buffer) lives in memory during the session
-- Session key is zeroed (`Buffer.fill(0)`) on lock, close, and idle timeout
-- Locked notebook sections are **stripped from disk on every write** via `sanitizeForDiskSync()` — plaintext never reaches the data file
-- Rate limiting with exponential backoff on failed password attempts (persisted across restarts)
-- Password strength enforcement: 10+ chars, 3/4 character classes, dictionary check against 160+ common passwords
+- Notebook passwords are **never held in the renderer** — after unlock, the renderer only holds an opaque 128-bit handle to a main-process session key
+- Session keys are zeroed (`Buffer.fill(0)`) on lock, close, and idle timeout
+- Locked notebook sections are **stripped from disk on every write** via `sanitizeForDiskSync()` in the renderer, with a second-layer `sanitizeDataJson()` safety net in the main process — plaintext never reaches the data file even if the renderer is compromised
+- **KDF downgrade protection** — decrypt rejects blobs with `N < 16384`, non-power-of-2 `N`, or malformed fields, preventing attackers who can write the data file from weakening the encryption header
+- Rate limiting with exponential backoff on failed password attempts (persisted across restarts, separate counters for master and notebook unlocks)
+- Password strength enforcement: 10+ chars, 3/4 character classes, dictionary check against 160+ common passwords, low-entropy pattern rejection
 
 ### Content Security Policy (Renderer)
 
@@ -91,8 +93,10 @@ All scripts and fonts loaded from local `lib/` directory. Zero CDN dependencies 
 - `contextIsolation: true`, `nodeIntegration: false`
 - All permissions denied (`setPermissionRequestHandler`)
 - DevTools disabled in production builds
-- DOMPurify sanitizes all note content on load and paste
-- Export dialogs warn about unencrypted output
+- DOMPurify sanitizes all note content on load, paste, and export
+- Export dialogs distinguish between generic unencrypted export and export from a password-protected notebook
+- Backup restore validates `v=2`, `kdf=scrypt`, and `N>=16384` before accepting
+- Password hint inclusion in backups is opt-in via explicit dialog (default: exclude)
 - Print dialogs warn for password-protected notebooks
 - Config keys allowlisted — renderer can only write known settings
 - CI actions pinned to commit SHAs to prevent supply-chain attacks
@@ -142,7 +146,7 @@ NoteForge/
 | macOS | `~/Library/Application Support/noteforge/` |
 | Linux | `~/.config/noteforge/` |
 
-Files: `noteforge-data.json` (unencrypted) or `noteforge-data.enc` (encrypted), `window-state.json`, `ratelimit.json`, `noteforge-hint.txt`
+Files: `noteforge-data.json` (unencrypted) or `noteforge-data.enc` (encrypted), `noteforge-config.json`, `window-state.json`, `ratelimit.json`, `noteforge-hint.txt`
 
 ## Keyboard Shortcuts
 
