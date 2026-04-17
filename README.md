@@ -179,6 +179,10 @@ Files written: `noteforge-data.json` (unencrypted) or `noteforge-data.enc` (encr
 
 See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
+## Contact
+
+Open an [issue](https://github.com/jamesccupps/NoteForge/issues) for bugs and feature requests. For security reports or general questions, email <jamesccupps@proton.me>.
+
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
