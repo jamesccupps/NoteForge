@@ -1,6 +1,6 @@
 {
   "name": "noteforge",
-  "version": "2.6.1",
+  "version": "2.7.0",
   "description": "Encrypted offline note-taking — a OneNote alternative that keeps your data local and protected.",
   "main": "main.js",
   "author": {
@@ -15,7 +15,11 @@
   "scripts": {
     "start": "electron .",
     "build:jsx": "babel app.jsx --out-file app.js --presets=@babel/preset-react",
-    "predist": "npm run build:jsx",
+    "test": "node test/test_crypto.js && node test/test_xss.js && node test/test_input_hook.js && node test/test_install.js",
+    "test:crypto": "node test/test_crypto.js",
+    "test:xss": "node test/test_xss.js && node test/test_input_hook.js",
+    "test:install": "node test/test_install.js",
+    "predist": "npm run build:jsx && npm test",
     "dist": "electron-builder --win"
   },
   "build": {
@@ -37,18 +41,8 @@
     ],
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
       ],
       "icon": "assets/icon.ico"
     },
@@ -80,6 +74,8 @@
     "@babel/cli": "^7.28.6",
     "@babel/preset-react": "^7.28.5",
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "dompurify": "^3.2.0",
+    "jsdom": "^25.0.0"
   }
 }

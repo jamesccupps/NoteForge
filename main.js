@@ -2,7 +2,13 @@ const { app, BrowserWindow, Menu, shell, dialog, ipcMain, session } = require("e
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
-const { autoUpdater } = require("electron-updater");
+
+// Guarded so a missing/corrupt electron-updater doesn't prevent app launch.
+// If load fails, auto-update is simply disabled for this session.
+let autoUpdater = null;
+let autoUpdaterLoadError = null;
+try { autoUpdater = require("electron-updater").autoUpdater; }
+catch (e) { autoUpdaterLoadError = e.message; console.error("[NoteForge] electron-updater unavailable:", e.message); }
 
 let mainWindow;
 const userDataPath = app.getPath("userData");
@@ -173,25 +179,49 @@ function checkPasswordStrength(pw) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   BRUTE-FORCE RATE LIMITING (separate master vs notebook counters)
+   BRUTE-FORCE RATE LIMITING
+   - Master password: single counter
+   - Notebook passwords: per-notebook counter keyed by hash of encrypted blob
+     (so we don't have to trust renderer-supplied nbId, and the key rotates
+     when the user changes the notebook password)
    ═══════════════════════════════════════════════════════════════ */
 let masterFails = 0, masterLockout = 0;
-let nbFails = 0, nbLockout = 0;
+const nbRateMap = new Map(); // nbKey (hex string) -> { fails, lockout }
 const MAX_ATTEMPTS = 5;
 const BASE_DELAY_MS = 1000;
+
+function nbKeyFromBlob(blob) {
+  // Derive stable per-notebook-password identifier from the encrypted blob's
+  // salt+iv. Rotates automatically when the user changes the notebook password.
+  try {
+    const obj = JSON.parse(blob);
+    return crypto.createHash("sha256").update((obj.salt||"")+(obj.iv||"")).digest("hex").slice(0,32);
+  } catch { return "invalid"; }
+}
 
 try {
   if (fs.existsSync(rlFile)) {
     const rl = JSON.parse(fs.readFileSync(rlFile, "utf-8"));
     masterFails = rl.masterFails || rl.failCount || 0;
     masterLockout = rl.masterLockout || rl.lockoutUntil || 0;
-    nbFails = rl.nbFails || 0;
-    nbLockout = rl.nbLockout || 0;
+    if (rl.nbMap && typeof rl.nbMap === "object") {
+      for (const [k, v] of Object.entries(rl.nbMap)) {
+        if (v && typeof v.fails === "number" && typeof v.lockout === "number") {
+          nbRateMap.set(k, { fails: v.fails, lockout: v.lockout });
+        }
+      }
+    }
+    // Legacy migration: if old global nbFails/nbLockout existed, discard —
+    // the per-notebook scheme starts fresh. Old counters were a leak vector.
   }
 } catch {}
 
 function saveRateLimit() {
-  try { fs.writeFileSync(rlFile, JSON.stringify({ masterFails, masterLockout, nbFails, nbLockout }), "utf-8"); } catch {}
+  try {
+    const nbMap = {};
+    for (const [k, v] of nbRateMap.entries()) nbMap[k] = v;
+    fs.writeFileSync(rlFile, JSON.stringify({ masterFails, masterLockout, nbMap }), "utf-8");
+  } catch {}
 }
 function checkMasterRateLimit() {
   const now = Date.now();
@@ -205,17 +235,24 @@ function recordMasterFailure() {
 }
 function recordMasterSuccess() { masterFails = 0; masterLockout = 0; saveRateLimit(); }
 
-function checkNbRateLimit() {
+function checkNbRateLimit(nbKey) {
+  const entry = nbRateMap.get(nbKey);
+  if (!entry) return null;
   const now = Date.now();
-  if (now < nbLockout) return `Too many failed attempts. Try again in ${Math.ceil((nbLockout - now) / 1000)}s`;
+  if (now < entry.lockout) return `Too many failed attempts. Try again in ${Math.ceil((entry.lockout - now) / 1000)}s`;
   return null;
 }
-function recordNbFailure() {
-  nbFails++;
-  if (nbFails >= MAX_ATTEMPTS) nbLockout = Date.now() + BASE_DELAY_MS * Math.pow(2, nbFails - MAX_ATTEMPTS);
+function recordNbFailure(nbKey) {
+  const entry = nbRateMap.get(nbKey) || { fails: 0, lockout: 0 };
+  entry.fails++;
+  if (entry.fails >= MAX_ATTEMPTS) entry.lockout = Date.now() + BASE_DELAY_MS * Math.pow(2, entry.fails - MAX_ATTEMPTS);
+  nbRateMap.set(nbKey, entry);
   saveRateLimit();
 }
-function recordNbSuccess() { nbFails = 0; nbLockout = 0; saveRateLimit(); }
+function recordNbSuccess(nbKey) {
+  nbRateMap.delete(nbKey);
+  saveRateLimit();
+}
 
 /* ═══════════════════════════════════════════════════════════════
    WINDOW STATE
@@ -413,16 +450,17 @@ ipcMain.handle("encrypt-notebook-sections", async (_e, json, password) => {
 });
 
 ipcMain.handle("decrypt-notebook-sections", async (_e, blob, password) => {
-  const rlErr = checkNbRateLimit();
+  const nbKey = nbKeyFromBlob(blob);
+  const rlErr = checkNbRateLimit(nbKey);
   if (rlErr) return { error: rlErr };
   try {
     const result = decryptData(blob, password);
-    recordNbSuccess();
+    recordNbSuccess(nbKey);
     // Cache the derived key under a random handle so renderer holds only a handle, not the password
     const nbKeyId = crypto.randomBytes(16).toString("hex");
     nbSessionKeys.set(nbKeyId, { key: result.key, salt: result.salt });
     return { success: true, sections: result.plaintext, nbKeyId };
-  } catch (e) { recordNbFailure(); return { error: "Wrong password" }; }
+  } catch (e) { recordNbFailure(nbKey); return { error: "Wrong password" }; }
 });
 
 // Re-encrypt using a cached notebook session key (called on every edit save)
@@ -488,8 +526,8 @@ ipcMain.handle("restore-backup", async () => {
   const warn = await dialog.showMessageBox(mainWindow, {
     type: "warning", title: "Restore Backup",
     message: "This will replace ALL current data.",
-    detail: "Your current notes will be overwritten with the backup. You'll need to enter the backup's password to unlock. Continue?",
-    buttons: ["Restore", "Cancel"], defaultId: 1, cancelId: 1,
+    detail: "Your current notes will be overwritten with the backup. You'll need to enter the backup's password to verify it can be decrypted. Continue?",
+    buttons: ["Choose Backup…", "Cancel"], defaultId: 1, cancelId: 1,
   });
   if (warn.response !== 0) return { canceled: true };
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -505,16 +543,39 @@ ipcMain.handle("restore-backup", async () => {
     if (!obj.data || !obj.salt || !obj.iv || !obj.tag) return { error: "Invalid backup file" };
     if (obj.v !== 2 || obj.kdf !== "scrypt") return { error: "Unsupported backup format" };
     if (typeof obj.N !== "number" || obj.N < MIN_SCRYPT_N) return { error: "Backup uses weakened encryption" };
-    fs.copyFileSync(src, encFile);
+    // Return the raw so renderer can prompt for password and call verify-and-restore
+    return { readyForPassword: true, backupPath: src, hasHint: fs.existsSync(src + ".hint") };
+  } catch (e) { return { error: "Invalid backup file: " + e.message }; }
+});
+
+// Two-step restore — password verified BEFORE we touch current data.
+// If verification fails, current encFile is untouched.
+ipcMain.handle("verify-and-restore-backup", async (_e, backupPath, password) => {
+  if (!backupPath || typeof backupPath !== "string") return { error: "Invalid backup path" };
+  if (!fs.existsSync(backupPath)) return { error: "Backup file no longer exists" };
+  try {
+    const raw = fs.readFileSync(backupPath, "utf-8");
+    // Test-decrypt — if this throws, the password is wrong and we do NOTHING destructive
+    const result = decryptData(raw, password);
+    result.key.fill(0); // zero the test key immediately; we'll re-derive on next unlock
+    // Password verified. Now it's safe to replace current data.
+    // Keep a local rollback copy first — a single "oh no" undo option.
+    const rollbackPath = encFile + ".pre-restore.bak";
+    if (fs.existsSync(encFile)) {
+      try { fs.copyFileSync(encFile, rollbackPath); } catch {}
+    }
+    fs.copyFileSync(backupPath, encFile);
     // Restore hint if exists
-    if (fs.existsSync(src + ".hint")) {
-      fs.writeFileSync(hintFile, fs.readFileSync(src + ".hint", "utf-8"), "utf-8");
+    if (fs.existsSync(backupPath + ".hint")) {
+      fs.writeFileSync(hintFile, fs.readFileSync(backupPath + ".hint", "utf-8"), "utf-8");
     }
     // Remove plain file if exists
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
     lockSession();
-    return { success: true, needsRestart: true };
-  } catch (e) { return { error: "Invalid backup file: " + e.message }; }
+    return { success: true, needsRestart: true, rollbackPath: fs.existsSync(rollbackPath) ? rollbackPath : null };
+  } catch (e) {
+    return { error: "Could not decrypt backup — wrong password or corrupted file" };
+  }
 });
 
 /* ═══════════════════════════════════════════════════════════════
@@ -592,6 +653,12 @@ function createWindow() {
   const iconPath = process.platform === "win32"
     ? path.join(__dirname, "assets", "icon.ico")
     : path.join(__dirname, "assets", "icon.png");
+  // Sandbox: on by default for defense-in-depth against a compromised renderer.
+  // Preload only uses ipcRenderer (no fs, no native modules) so it's sandbox-safe.
+  // If a specific Electron/OS combo breaks it, set `sandbox: false` in noteforge-config.json
+  // and restart. No rebuild required.
+  const cfg = loadConfig();
+  const useSandbox = cfg.sandbox !== false; // default true
   mainWindow = new BrowserWindow({
     width: ws.width, height: ws.height, x: ws.x, y: ws.y,
     minWidth: 700, minHeight: 500, title: "NoteForge",
@@ -600,6 +667,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true, nodeIntegration: false,
+      sandbox: useSandbox,
       spellcheck: true, navigateOnDragDrop: false,
     },
   });
@@ -635,6 +703,7 @@ function createWindow() {
       { label: "Settings…", click: send("encryption-settings") },
       { label: "Lock App", accelerator: "CmdOrCtrl+L", click: send("lock-app") },
       { type: "separator" },
+      { label: "Empty Trash…", click: send("empty-trash") },
       { label: "Open Data Folder", click: send("open-data-folder") },
       { type: "separator" },
       { role: "quit" },
@@ -658,9 +727,11 @@ function createWindow() {
       { role: "togglefullscreen" },
     ]},
     { label: "Help", submenu: [
+      { label: "Keyboard Shortcuts", accelerator: "F1", click: send("show-shortcuts") },
+      { type: "separator" },
       { label: "About NoteForge", click: () => dialog.showMessageBox(mainWindow, {
-        type: "info", title: "About NoteForge", message: "NoteForge v2.6.1",
-        detail: "Encrypted offline note-taking.\nAES-256-GCM · scrypt (N=65536)\nDerived key session · Auto-lock\n\nData: " + userDataPath,
+        type: "info", title: "About NoteForge", message: "NoteForge v2.7.0",
+        detail: "Encrypted offline note-taking.\nAES-256-GCM · scrypt (N=65536)\nDerived key session · Auto-lock · Sandboxed renderer\n\nData: " + userDataPath,
       })},
     ]},
   ];
@@ -696,7 +767,7 @@ function saveConfig(cfg) {
 
 ipcMain.handle("get-config", async () => loadConfig());
 ipcMain.handle("set-config", async (_e, key, value) => {
-  const ALLOWED = new Set(["autoUpdate"]);
+  const ALLOWED = new Set(["autoUpdate", "sandbox"]);
   if (!ALLOWED.has(key)) return { error: "Unknown config key" };
   const cfg = loadConfig();
   cfg[key] = value;
@@ -704,17 +775,29 @@ ipcMain.handle("set-config", async (_e, key, value) => {
   return cfg;
 });
 
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
+if (autoUpdater) {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+}
+
+// Cached for About dialog / troubleshooting
+let lastUpdateError = null;
 
 function setupAutoUpdater() {
   if (IS_DEV) return;
+  if (!autoUpdater) {
+    console.warn("[NoteForge] Auto-updater unavailable:", autoUpdaterLoadError);
+    return;
+  }
   const cfg = loadConfig();
   if (!cfg.autoUpdate) return; // user disabled auto-update
 
   // Check for updates 5 seconds after launch (non-blocking)
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
+    autoUpdater.checkForUpdates().catch(e => {
+      lastUpdateError = e?.message || String(e);
+      console.error("[NoteForge] Update check failed:", lastUpdateError);
+    });
   }, 5000);
 
   autoUpdater.on("update-available", (info) => {
@@ -747,13 +830,26 @@ function setupAutoUpdater() {
     });
   });
 
-  autoUpdater.on("error", () => {});
+  autoUpdater.on("error", (err) => {
+    lastUpdateError = err?.message || String(err);
+    console.error("[NoteForge] Update error:", lastUpdateError);
+  });
 }
 
 ipcMain.handle("check-for-updates", async () => {
-  if (IS_DEV) return { update: false };
+  if (IS_DEV) return { update: false, devMode: true };
+  if (!autoUpdater) return { update: false, error: "Auto-updater not loaded: " + autoUpdaterLoadError };
   try {
     const result = await autoUpdater.checkForUpdates();
     return { update: !!result?.updateInfo, version: result?.updateInfo?.version };
-  } catch { return { update: false }; }
+  } catch (e) {
+    lastUpdateError = e?.message || String(e);
+    return { update: false, error: lastUpdateError };
+  }
 });
+
+ipcMain.handle("get-update-status", async () => ({
+  available: !!autoUpdater,
+  loadError: autoUpdaterLoadError,
+  lastError: lastUpdateError,
+}));
