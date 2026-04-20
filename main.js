@@ -730,7 +730,7 @@ function createWindow() {
       { label: "Keyboard Shortcuts", accelerator: "F1", click: send("show-shortcuts") },
       { type: "separator" },
       { label: "About NoteForge", click: () => dialog.showMessageBox(mainWindow, {
-        type: "info", title: "About NoteForge", message: "NoteForge v2.7.0",
+        type: "info", title: "About NoteForge", message: "NoteForge v2.7.1",
         detail: "Encrypted offline note-taking.\nAES-256-GCM · scrypt (N=65536)\nDerived key session · Auto-lock · Sandboxed renderer\n\nData: " + userDataPath,
       })},
     ]},

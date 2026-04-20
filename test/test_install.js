@@ -23,9 +23,10 @@ t("CSP meta tag present", /Content-Security-Policy/i.test(html));
 t("CSP blocks connect-src", /connect-src 'none'/.test(html));
 t("CSP has script-src 'self'", /script-src 'self'/.test(html));
 t("CSP has default-src 'none'", /default-src 'none'/.test(html));
-t("SRI: react has integrity", /react\.min\.js.*integrity=/.test(html));
-t("SRI: react-dom has integrity", /react-dom\.min\.js.*integrity=/.test(html));
-t("SRI: purify has integrity", /purify\.min\.js.*integrity=/.test(html));
+// Note: SRI hashes intentionally NOT used — they break Electron's file:// loader
+// (CORS fails silently with integrity+crossorigin on local files). The scripts'
+// integrity is guaranteed by the signed installer and electron-builder ASAR packing.
+t("No SRI on local scripts (would break file:// loading)", !/lib\/react\.min\.js.*integrity=/.test(html));
 
 const preload = fs.readFileSync(path.join(root, "preload.js"), "utf-8");
 const main = fs.readFileSync(path.join(root, "main.js"), "utf-8");
