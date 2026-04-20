@@ -3,11 +3,15 @@ const {useState,useEffect,useRef,useCallback,useMemo}=React;
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS
    ═══════════════════════════════════════════════════════════════ */
+const SCHEMA_VERSION=1; // bump if notebook/section/page shape changes; used for safe migrations
 const NB_COLORS=["#7c6ef0","#e05a9f","#e89020","#1cb888","#3b82f6","#9061e0","#e54545","#14b8a6","#d96830","#64748b"];
 const FONT_SIZES=[{l:"10",v:"1"},{l:"12",v:"2"},{l:"14",v:"3"},{l:"16",v:"4"},{l:"18",v:"5"},{l:"24",v:"6"},{l:"32",v:"7"}];
 const HEADINGS=[{l:"Normal",v:"div"},{l:"H1",v:"h1"},{l:"H2",v:"h2"},{l:"H3",v:"h3"},{l:"H4",v:"h4"}];
 const TXT_COLORS=["#000000","#374151","#dc2626","#ea580c","#ca8a04","#16a34a","#2563eb","#7c3aed","#db2777","#ffffff"];
 const HL_COLORS=["transparent","#fef08a","#bbf7d0","#bfdbfe","#e9d5ff","#fecdd3","#fed7aa","#ccfbf1","#e2e8f0"];
+const IMG_MAX_INLINE_BYTES=5*1024*1024; // 5 MB hard cap on pasted images before downscale attempt
+const IMG_DOWNSCALE_TARGET_WIDTH=1600;
+const IMG_DOWNSCALE_QUALITY=0.85;
 const uid=()=>"id-"+Date.now().toString(36)+Math.random().toString(36).substr(2,6);
 
 const THEMES={
@@ -89,16 +93,37 @@ const prefsStore={
 /* ═══════════════════════════════════════════════════════════════
    UTILITIES
    ═══════════════════════════════════════════════════════════════ */
-const snippet=(html)=>html?html.replace(/<[^>]*>/g," ").replace(/\s+/g," ").trim().slice(0,80):"";
+const snippet=(html)=>html?decodeEntities(html.replace(/<[^>]*>/g," ")).replace(/\s+/g," ").trim().slice(0,80):"";
 const escHtml=(s)=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const hasElectronCrypto=()=>!!(window.electronAPI?.checkEncryption);
+// Decode HTML entities using the browser's built-in parser — safe because we read textContent only
+let _entityDecoder=null;
+function decodeEntities(s){
+  if(!s)return s;
+  if(!_entityDecoder)_entityDecoder=document.createElement("textarea");
+  _entityDecoder.innerHTML=s;
+  return _entityDecoder.value;
+}
 
 /* ── HTML Sanitization (DOMPurify) ─────────────────────────────
    Strips script tags, event handlers, javascript: URLs, etc.
-   Applied before any HTML is set as innerHTML. */
+   Applied before any HTML is set as innerHTML.
+   Additional hook: restrict <input type=...> to checkbox only, so a malicious
+   paste can't inject <input type="password"> for in-note phishing. */
+let _dompurifyHookInstalled=false;
+function installDOMPurifyHook(){
+  if(_dompurifyHookInstalled||!window.DOMPurify)return;
+  window.DOMPurify.addHook("uponSanitizeAttribute",(node,data)=>{
+    if(node.nodeName==="INPUT"&&data.attrName==="type"){
+      if(String(data.attrValue).toLowerCase()!=="checkbox")data.keepAttr=false;
+    }
+  });
+  _dompurifyHookInstalled=true;
+}
 const sanitizeHTML=(html)=>{
   if(!html)return html;
   if(window.DOMPurify){
+    installDOMPurifyHook();
     return window.DOMPurify.sanitize(html,{
       ALLOWED_TAGS:["h1","h2","h3","h4","p","br","strong","b","em","i","u","s","del",
         "ul","ol","li","blockquote","pre","code","table","thead","tbody","tr","td","th",
@@ -107,7 +132,8 @@ const sanitizeHTML=(html)=>{
         "for","color","size","face","target","width","height","colspan","rowspan"],
       FORBID_TAGS:["script","iframe","object","embed","form","textarea","select","button","meta","link","base"],
       FORBID_ATTR:["onerror","onload","onclick","onmouseover","onfocus","onblur","onchange",
-        "onsubmit","onkeydown","onkeyup","onkeypress","onmousedown","onmouseup"],
+        "onsubmit","onkeydown","onkeyup","onkeypress","onmousedown","onmouseup",
+        "onauxclick","onpointerdown","onpointerup","onwheel","onbeforeinput","oninput","onpaste"],
       ALLOW_DATA_ATTR:false,
     });
   }
@@ -132,6 +158,125 @@ function sanitizeForDiskSync(data){
     // Locked notebook: NEVER write plaintext sections to disk
     return{...nb,sections:[]};
   })};
+}
+
+/* ── Image downscale helper ────────────────────────────────────
+   Large pasted photos are resized to IMG_DOWNSCALE_TARGET_WIDTH and
+   re-encoded as JPEG. Keeps the encrypted data file lean. */
+function downscaleImage(file, maxBytes){
+  return new Promise((resolve,reject)=>{
+    if(file.size>IMG_MAX_INLINE_BYTES){
+      return reject(new Error(`Image is ${(file.size/1048576).toFixed(1)} MB — over the 5 MB inline limit.`));
+    }
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error("Could not read image"));
+    reader.onload=(ev)=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error("Could not decode image"));
+      img.onload=()=>{
+        // If already small enough, use original
+        if(file.size<=(maxBytes||512000)){return resolve(ev.target.result)}
+        // Downscale to target width, preserving aspect ratio
+        const scale=Math.min(1,IMG_DOWNSCALE_TARGET_WIDTH/img.width);
+        const w=Math.round(img.width*scale),h=Math.round(img.height*scale);
+        const canvas=document.createElement("canvas");
+        canvas.width=w;canvas.height=h;
+        const ctx=canvas.getContext("2d");
+        ctx.drawImage(img,0,0,w,h);
+        const mime=file.type==="image/png"?"image/png":"image/jpeg";
+        try{
+          const dataUrl=canvas.toDataURL(mime,IMG_DOWNSCALE_QUALITY);
+          resolve(dataUrl);
+        }catch(e){reject(new Error("Could not compress image"))}
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL DIALOGS — replace native alert/confirm/prompt for consistent UX
+   ═══════════════════════════════════════════════════════════════ */
+function ConfirmDialog({title,message,confirmLabel,confirmStyle,onConfirm,onCancel,dark}){
+  const ref=useRef(null);
+  useEffect(()=>{ref.current?.focus()},[]);
+  return <div className="nf-modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onCancel()}}>
+    <div className="nf-modal" style={dark?THEMES.dark:THEMES.light} onMouseDown={e=>e.stopPropagation()}>
+      <h3>{title}</h3>
+      <p>{message}</p>
+      <div className="nf-modal-actions">
+        <button className="nf-modal-btn secondary" onClick={onCancel}>Cancel</button>
+        <button ref={ref} className={`nf-modal-btn ${confirmStyle||"primary"}`} onClick={onConfirm}
+          onKeyDown={e=>{if(e.key==="Enter")onConfirm();if(e.key==="Escape")onCancel()}}>{confirmLabel||"OK"}</button>
+      </div>
+    </div>
+  </div>;
+}
+function PromptDialog({title,message,placeholder,defaultValue,confirmLabel,onConfirm,onCancel,dark}){
+  const [val,setVal]=useState(defaultValue||"");
+  const ref=useRef(null);
+  useEffect(()=>{ref.current?.focus();ref.current?.select()},[]);
+  return <div className="nf-modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onCancel()}}>
+    <div className="nf-modal" style={dark?THEMES.dark:THEMES.light} onMouseDown={e=>e.stopPropagation()}>
+      <h3>{title}</h3>
+      {message&&<p>{message}</p>}
+      <input ref={ref} className="nf-modal-input" placeholder={placeholder||""} value={val}
+        onChange={e=>setVal(e.target.value)}
+        onKeyDown={e=>{if(e.key==="Enter")onConfirm(val);if(e.key==="Escape")onCancel()}}/>
+      <div className="nf-modal-actions">
+        <button className="nf-modal-btn secondary" onClick={onCancel}>Cancel</button>
+        <button className="nf-modal-btn primary" onClick={()=>onConfirm(val)}>{confirmLabel||"OK"}</button>
+      </div>
+    </div>
+  </div>;
+}
+function AlertDialog({title,message,dark,onClose}){
+  const ref=useRef(null);
+  useEffect(()=>{ref.current?.focus()},[]);
+  return <div className="nf-modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
+    <div className="nf-modal" style={dark?THEMES.dark:THEMES.light} onMouseDown={e=>e.stopPropagation()}>
+      <h3>{title}</h3>
+      <p>{message}</p>
+      <div className="nf-modal-actions">
+        <button ref={ref} className="nf-modal-btn primary" onClick={onClose}
+          onKeyDown={e=>{if(e.key==="Enter"||e.key==="Escape")onClose()}}>OK</button>
+      </div>
+    </div>
+  </div>;
+}
+function ShortcutsDialog({onClose,dark}){
+  const ref=useRef(null);
+  useEffect(()=>{ref.current?.focus()},[]);
+  const rows=[
+    ["Ctrl+N","New Page"],["Ctrl+Shift+N","New Notebook"],
+    ["Ctrl+B / I / U","Bold / Italic / Underline"],["Ctrl+D","Duplicate Page"],
+    ["Ctrl+F","Find & Replace"],["Ctrl+L","Lock App"],
+    ["Ctrl+Z / Ctrl+Y","Undo / Redo"],["Ctrl+= / Ctrl+-","Zoom In / Out"],
+    ["Ctrl+\\","Toggle Sidebar"],["Ctrl+Shift+D","Toggle Theme"],
+    ["Ctrl+P","Print"],["Ctrl+Shift+E","Export HTML"],["F1","This dialog"],
+  ];
+  return <div className="nf-modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
+    <div className="nf-modal" style={{...(dark?THEMES.dark:THEMES.light),width:440}}
+      onMouseDown={e=>e.stopPropagation()}>
+      <h3>Keyboard Shortcuts</h3>
+      <div ref={ref} tabIndex={-1} style={{outline:"none",marginTop:10,maxHeight:"60vh",overflowY:"auto"}}
+        onKeyDown={e=>{if(e.key==="Escape"||e.key==="Enter")onClose()}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+          <tbody>
+            {rows.map(([k,v])=><tr key={k}>
+              <td style={{padding:"4px 8px 4px 0",whiteSpace:"nowrap"}}>
+                <kbd style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,padding:"2px 6px",
+                  background:"var(--code-bg)",border:"1px solid var(--border)",borderRadius:4}}>{k}</kbd>
+              </td>
+              <td style={{padding:"4px 0",color:"var(--text-secondary)"}}>{v}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+      <div className="nf-modal-actions"><button className="nf-modal-btn primary" onClick={onClose}>Close</button></div>
+    </div>
+  </div>;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -232,7 +377,7 @@ function RenameInput({id,initialValue,onRename,onCancel}){
 /* ═══════════════════════════════════════════════════════════════
    PASSWORD DIALOG (reusable overlay)
    ═══════════════════════════════════════════════════════════════ */
-function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,error,showConfirm,showHint,children}){
+function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,error,showConfirm,showHint,children,dark}){
   const [pw,setPw]=useState("");
   const [pw2,setPw2]=useState("");
   const [hint,setHint]=useState("");
@@ -260,7 +405,7 @@ function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,error,sho
     <span style={{fontSize:14}}>{met?"✓":"○"}</span>{text}
   </div>;
 
-  return <div className="nf-overlay" style={THEMES.dark} onClick={stop} onMouseDown={stop} onKeyDown={stop} onKeyUp={stop} onKeyPress={stop}>
+  return <div className="nf-overlay" style={dark?THEMES.dark:THEMES.light} onClick={stop} onMouseDown={stop} onKeyDown={stop} onKeyUp={stop} onKeyPress={stop}>
     <div className="nf-overlay-card">
       <div style={{marginBottom:16}}><I n="shield" s={32}/></div>
       <div className="nf-overlay-title">{title}</div>
@@ -338,7 +483,17 @@ function NoteForge(){
   const [pwDialog,setPwDialog]=useState(null); // null | {type,nbId,...}
   const [pwError,setPwError]=useState("");
   const [unlockedNbs,setUnlockedNbs]=useState(new Set());
-  const [autoUpdate,setAutoUpdate]=useState(true); // loaded from config // notebook IDs unlocked this session
+  const [autoUpdate,setAutoUpdate]=useState(true); // loaded from config
+  const [sandboxEnabled,setSandboxEnabled]=useState(true); // loaded from config (main-process setting)
+
+  // Modal dialogs (custom replacements for native alert/confirm/prompt)
+  const [confirmDialog,setConfirmDialog]=useState(null); // {title,message,confirmLabel,confirmStyle,resolve}
+  const [promptDialog,setPromptDialog]=useState(null); // {title,message,placeholder,defaultValue,resolve}
+  const [alertDialog,setAlertDialog]=useState(null); // {title,message}
+  const [showShortcuts,setShowShortcuts]=useState(false);
+  const [restoreFlow,setRestoreFlow]=useState(null); // {backupPath,hasHint}
+  // Toolbar reflection — tracks current format under cursor
+  const [toolbarFmt,setToolbarFmt]=useState({block:"div",size:"3"});
 
   const edRef=useRef(null);
   const saveTimer=useRef(null);
@@ -350,6 +505,38 @@ function NoteForge(){
   const nbKeys=useRef(new Map()); // nbId -> opaque nbKeyId (main-process session key handle)
   const [autoLockMin,setAutoLockMin]=useState(savedPrefs.current.autoLockMin||15);
 
+  // Promise-based confirm/prompt/alert helpers — wrap the modal state so call
+  // sites read naturally: `if(await confirm("Delete?")) { ... }`
+  const confirm=useCallback((opts)=>new Promise(resolve=>{
+    const o=typeof opts==="string"?{message:opts}:opts;
+    setConfirmDialog({
+      title:o.title||"Confirm",
+      message:o.message||"",
+      confirmLabel:o.confirmLabel||"OK",
+      confirmStyle:o.confirmStyle||"primary",
+      resolve,
+    });
+  }),[]);
+  const promptUser=useCallback((opts)=>new Promise(resolve=>{
+    const o=typeof opts==="string"?{message:opts}:opts;
+    setPromptDialog({
+      title:o.title||"Input",
+      message:o.message||"",
+      placeholder:o.placeholder||"",
+      defaultValue:o.defaultValue||"",
+      confirmLabel:o.confirmLabel||"OK",
+      resolve,
+    });
+  }),[]);
+  const alertUser=useCallback((opts)=>new Promise(resolve=>{
+    const o=typeof opts==="string"?{message:opts}:opts;
+    setAlertDialog({
+      title:o.title||"Notice",
+      message:o.message||"",
+      resolve,
+    });
+  }),[]);
+
   useEffect(()=>{prefsStore.save({dark,navOpen,wrap,zoom,autoLockMin})},[dark,navOpen,wrap,zoom,autoLockMin]);
 
   /* ── Lock / Auto-lock ────────────────────────────────────── */
@@ -358,7 +545,7 @@ function NoteForge(){
   const lockApp=useCallback(async()=>{
     if(saveTimer.current&&dataRef.current){
       clearTimeout(saveTimer.current);saveTimer.current=null;
-      const sanitized=sanitizeForDiskSync(dataRef.current);
+      const sanitized={...sanitizeForDiskSync(dataRef.current),version:SCHEMA_VERSION};
       await store.set(JSON.stringify(sanitized));
     }
     if(window.electronAPI?.lockApp)await window.electronAPI.lockApp();
@@ -368,16 +555,21 @@ function NoteForge(){
     if(encEnabled)setAppPhase("needsPassword");
   },[encEnabled]);
 
-  // Reset idle timer on any user interaction
+  // Reset idle timer on any user interaction (throttled to ~1 Hz so mousemove
+  // doesn't flood the call — we still lock after `autoLockMin` minutes)
   useEffect(()=>{
     if(!encEnabled||appPhase!=="ready")return;
     const ms=autoLockMin*60*1000;
+    let lastReset=0;
     const reset=()=>{
+      const now=Date.now();
+      if(now-lastReset<1000)return;
+      lastReset=now;
       if(idleTimer.current)clearTimeout(idleTimer.current);
       idleTimer.current=setTimeout(()=>lockApp(),ms);
     };
     reset();
-    const events=["mousedown","keydown","scroll","touchstart"];
+    const events=["mousedown","mousemove","keydown","scroll","wheel","touchstart"];
     events.forEach(e=>window.addEventListener(e,reset,{passive:true}));
     return()=>{
       if(idleTimer.current)clearTimeout(idleTimer.current);
@@ -391,7 +583,7 @@ function NoteForge(){
       if(saveTimer.current&&dataRef.current){
         clearTimeout(saveTimer.current);saveTimer.current=null;
         // CRITICAL: strip plaintext from locked notebooks before ANY write
-        const sanitized=sanitizeForDiskSync(dataRef.current);
+        const sanitized={...sanitizeForDiskSync(dataRef.current),version:SCHEMA_VERSION};
         const json=JSON.stringify(sanitized);
         if(window.electronAPI?.storageSetSync)window.electronAPI.storageSetSync(json);
         else try{localStorage.setItem("noteforge-data",json)}catch{}
@@ -430,6 +622,7 @@ function NoteForge(){
       if(window.electronAPI?.getConfig){
         const cfg=await window.electronAPI.getConfig();
         if(cfg.autoUpdate!==undefined)setAutoUpdate(cfg.autoUpdate);
+        if(cfg.sandbox!==undefined)setSandboxEnabled(cfg.sandbox!==false);
       }
       if(hasElectronCrypto()){
         const status=await window.electronAPI.checkEncryption();
@@ -469,6 +662,8 @@ function NoteForge(){
       // Step 2: MANDATORY — strip ALL plaintext from locked notebooks before writing
       // This is the safety net. Even if step 1 failed or was skipped, plaintext never hits disk.
       toSave=sanitizeForDiskSync(toSave);
+      // Stamp schema version so future releases can migrate safely
+      toSave={...toSave,version:SCHEMA_VERSION};
       await store.set(JSON.stringify(toSave));setSaved(true);
     },500);
   },[]);
@@ -551,10 +746,15 @@ function NoteForge(){
     for(const item of cd.items){
       if(item.type.startsWith("image/")){
         e.preventDefault();const file=item.getAsFile();
-        if(file.size>512000){alert("Image too large (max 500KB).");return}
-        const reader=new FileReader();
-        reader.onload=ev=>exec("insertHTML",`<img src="${ev.target.result}">`);
-        reader.readAsDataURL(file);return;
+        if(!file)return;
+        // Auto-downscale large images so the encrypted data file stays lean.
+        // 5 MB hard cap to avoid canvas/memory pathologies.
+        downscaleImage(file,512000).then(dataUrl=>{
+          exec("insertHTML",`<img src="${dataUrl}" alt="">`);
+        }).catch(err=>{
+          alertUser({title:"Image too large",message:err.message||"Could not process image."});
+        });
+        return;
       }
     }
     // Always prevent default — never let the browser insert raw clipboard HTML
@@ -565,7 +765,7 @@ function NoteForge(){
     // Fallback: if only HTML is available (rare), sanitize it
     const html=cd.getData("text/html");
     if(html){const clean=sanitizeHTML(html);if(clean)document.execCommand("insertHTML",false,clean)}
-  },[exec]);
+  },[exec,alertUser]);
   const onKeyDown=useCallback(e=>{
     if(e.key==="Tab"){
       const sel=window.getSelection();if(sel.anchorNode){
@@ -586,6 +786,7 @@ function NoteForge(){
       if(mod&&e.key==="h"){e.preventDefault();setShowFR(true)}
       if(mod&&e.key==="d"&&!e.shiftKey){e.preventDefault();if(aPg)duplicatePage(aPg)}
       if(mod&&e.key==="l"){e.preventDefault();if(encEnabled)lockApp()}
+      if(e.key==="F1"){e.preventDefault();setShowShortcuts(true)}
     };
     window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
   },[aPg,encEnabled,lockApp]);
@@ -613,9 +814,12 @@ function NoteForge(){
       if(a==="export-backup")window.electronAPI.exportBackup();
       if(a==="restore-backup")(async()=>{
         const r=await window.electronAPI.restoreBackup();
-        if(r?.needsRestart){dataRef.current=null;setData(null);setEncEnabled(true);setAppPhase("needsPassword")}
+        if(r?.error){alertUser({title:"Restore failed",message:r.error});return}
+        if(r?.readyForPassword){setRestoreFlow({backupPath:r.backupPath,hasHint:r.hasHint})}
       })();
       if(a==="lock-app"){if(encEnabled)lockApp()}
+      if(a==="empty-trash")emptyTrash();
+      if(a==="show-shortcuts")setShowShortcuts(true);
       if(a==="new-notebook")addNotebook();
       if(a==="new-page"){
         const d=dataRef.current;if(!d)return;
@@ -628,6 +832,23 @@ function NoteForge(){
     });
     return cleanup;
   },[]);
+
+  // Track cursor format for heading/font-size select reflection
+  useEffect(()=>{
+    if(!edRef.current)return;
+    const sync=()=>{
+      try{
+        // Only update when caret is actually inside the editor
+        const sel=document.getSelection();
+        if(!sel?.anchorNode||!edRef.current.contains(sel.anchorNode))return;
+        const block=(document.queryCommandValue("formatBlock")||"div").toLowerCase();
+        const size=document.queryCommandValue("fontSize")||"3";
+        setToolbarFmt(p=>(p.block===block&&p.size===size)?p:{block,size});
+      }catch{}
+    };
+    document.addEventListener("selectionchange",sync);
+    return()=>document.removeEventListener("selectionchange",sync);
+  },[curPage]);
 
   useEffect(()=>{const h=()=>{setCtx(null);setEdCtx(null)};window.addEventListener("click",h);return()=>window.removeEventListener("click",h)},[]);
 
@@ -683,8 +904,9 @@ function NoteForge(){
   };
   const softDelete=(pid)=>{updatePage(pid,()=>({deleted:true,modified:Date.now()}));if(aPg===pid)autoSelectNextPage(pid)};
   const restorePage=(pid)=>updatePage(pid,()=>({deleted:false}));
-  const permDelete=(pid)=>{
-    if(!confirm("Permanently delete this page?"))return;const d=dataRef.current;
+  const permDelete=async(pid)=>{
+    if(!await confirm({title:"Delete Forever",message:"Permanently delete this page? This cannot be undone.",confirmLabel:"Delete Forever",confirmStyle:"danger"}))return;
+    const d=dataRef.current;
     persist({...d,notebooks:d.notebooks.map(nb=>({...nb,sections:(nb.sections||[]).map(sec=>({...sec,pages:sec.pages.filter(p=>p.id!==pid)}))}))});
     if(aPg===pid)autoSelectNextPage(pid);
   };
@@ -692,10 +914,15 @@ function NoteForge(){
     for(const nb of dataRef.current.notebooks)for(const sec of nb.sections||[])
       if(sec.pages.find(p=>p.id===pid)){updatePage(pid,p=>({pinned:!p.pinned}));return}
   };
-  const delSection=(sid)=>{
+  const delSection=async(sid)=>{
     const d=dataRef.current;let count=0;let parentNb=null;
     for(const nb of d.notebooks)for(const sec of nb.sections||[])if(sec.id===sid){count=sec.pages.length;parentNb=nb}
-    if(!confirm(count>0?`Delete section and ${count} page${count>1?"s":""}?`:"Delete empty section?"))return;
+    const ok=await confirm({
+      title:"Delete Section",
+      message:count>0?`Delete section and ${count} page${count>1?"s":""}? This cannot be undone.`:"Delete empty section?",
+      confirmLabel:"Delete",confirmStyle:"danger",
+    });
+    if(!ok)return;
     persist({...d,notebooks:d.notebooks.map(nb=>({...nb,sections:(nb.sections||[]).filter(s=>s.id!==sid)}))});
     if(aSec===sid){
       // Auto-select next section in same notebook
@@ -704,15 +931,53 @@ function NoteForge(){
       else{setASec(null);setAPg(null)}
     }
   };
-  const delNotebook=(nid)=>{
+  const delNotebook=async(nid)=>{
     const d=dataRef.current;const nb=d.notebooks.find(n=>n.id===nid);
     const pc=nb?(nb.sections||[]).reduce((a,s)=>a+s.pages.length,0):0;
-    if(!confirm(pc>0?`Delete "${nb.name}" and all ${pc} pages?`:`Delete "${nb?.name}"?`))return;
+    const ok=await confirm({
+      title:"Delete Notebook",
+      message:pc>0?`Delete "${nb.name}" and all ${pc} pages? This cannot be undone.`:`Delete "${nb?.name}"?`,
+      confirmLabel:"Delete",confirmStyle:"danger",
+    });
+    if(!ok)return;
     persist({...d,notebooks:d.notebooks.filter(n=>n.id!==nid)});
     const keyId=nbKeys.current.get(nid);
     if(keyId&&window.electronAPI?.forgetNotebookKey)window.electronAPI.forgetNotebookKey(keyId);
     nbKeys.current.delete(nid);
     if(aNb===nid){setANb(null);setASec(null);setAPg(null)}
+  };
+  // Empty trash — removes all soft-deleted pages
+  const emptyTrash=async()=>{
+    const d=dataRef.current;if(!d)return;
+    let n=0;
+    for(const nb of d.notebooks)for(const sec of nb.sections||[])for(const pg of sec.pages)if(pg.deleted)n++;
+    if(n===0){alertUser({title:"Trash is empty",message:"Nothing to clean up."});return}
+    const ok=await confirm({
+      title:"Empty Trash",
+      message:`Permanently delete ${n} page${n>1?"s":""} from trash? This cannot be undone.`,
+      confirmLabel:"Empty Trash",confirmStyle:"danger",
+    });
+    if(!ok)return;
+    persist({...d,notebooks:d.notebooks.map(nb=>({...nb,sections:(nb.sections||[]).map(sec=>({...sec,pages:sec.pages.filter(p=>!p.deleted)}))}))});
+  };
+  // Re-lock a notebook in-session — discards in-memory plaintext and the cached session key
+  const relockNotebook=async(nbId)=>{
+    const d=dataRef.current;const nb=d.notebooks.find(n=>n.id===nbId);
+    if(!nb||!nb.locked||!nb.encSections)return;
+    const ok=await confirm({
+      title:`Re-lock "${nb.name}"?`,
+      message:"You'll need to re-enter the notebook password to view these pages again.",
+      confirmLabel:"Re-lock",
+    });
+    if(!ok)return;
+    const keyId=nbKeys.current.get(nbId);
+    if(keyId&&window.electronAPI?.forgetNotebookKey)await window.electronAPI.forgetNotebookKey(keyId);
+    nbKeys.current.delete(nbId);
+    // Strip plaintext sections from in-memory state (encSections is already on disk-authoritative)
+    const nd={...d,notebooks:d.notebooks.map(n=>n.id!==nbId?n:{...n,sections:[]})};
+    persist(nd);
+    setUnlockedNbs(p=>{const s=new Set(p);s.delete(nbId);return s});
+    if(aNb===nbId&&!nb.sections?.length){setASec(null);setAPg(null)}
   };
 
   /* ═══ Notebook Lock/Unlock ═════════════════════════════════ */
@@ -812,10 +1077,14 @@ function NoteForge(){
     '<table><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></table><p><br></p>');
   const insertCheck=()=>{const id=uid();exec("insertHTML",
     `<div class="nf-check"><input type="checkbox" id="${id}"><label for="${id}">To-do item</label></div>`)};
-  const insertLink=()=>{
-    const url=prompt("Enter URL:","https://");
-    if(url){const sel=window.getSelection();const safe=escHtml(url);const text=escHtml(sel.toString()||url);
-      exec("insertHTML",`<a href="${safe}" title="${safe}">${text}</a>`)}
+  const insertLink=async()=>{
+    const sel=window.getSelection();
+    const selText=sel?.toString()||"";
+    const url=await promptUser({title:"Insert Link",message:selText?`Link URL for "${selText.slice(0,40)}"`:"Enter URL",placeholder:"https://example.com",defaultValue:"https://"});
+    if(!url||!url.trim()||url.trim()==="https://")return;
+    const safe=escHtml(url.trim());
+    const text=escHtml(selText||url.trim());
+    exec("insertHTML",`<a href="${safe}" title="${safe}" target="_blank" rel="noopener noreferrer">${text}</a>`);
   };
 
   /* ═══ Export ═══════════════════════════════════════════════ */
@@ -865,7 +1134,7 @@ function NoteForge(){
   </div>;
 
   // Master password prompt
-  if(appPhase==="needsPassword")return <PasswordDialog
+  if(appPhase==="needsPassword")return <PasswordDialog dark={dark}
     title="Unlock NoteForge"
     subtitle={masterHint?`Enter your master password. Hint: ${masterHint}`:"Enter your master password to decrypt your notes."}
     confirmLabel="Unlock"
@@ -929,7 +1198,7 @@ function NoteForge(){
     </div>
   </div>}
 
-  {pwDialog?.type==="enable-enc"&&<PasswordDialog
+  {pwDialog?.type==="enable-enc"&&<PasswordDialog dark={dark}
     title="Enable Encryption" subtitle="Choose a master password. Don't forget it — there's no recovery."
     confirmLabel="Encrypt" showConfirm showHint error={pwError}
     onCancel={()=>{setPwDialog({type:"enc-settings"});setPwError("")}}
@@ -941,7 +1210,7 @@ function NoteForge(){
       setPwDialog({type:"enc-settings"});
     }}/>}
 
-  {pwDialog?.type==="disable-enc"&&<PasswordDialog
+  {pwDialog?.type==="disable-enc"&&<PasswordDialog dark={dark}
     title="Remove Encryption" subtitle="Enter your current password to decrypt all data."
     confirmLabel="Remove Encryption" error={pwError}
     onCancel={()=>{setPwDialog({type:"enc-settings"});setPwError("")}}
@@ -952,7 +1221,7 @@ function NoteForge(){
       setEncEnabled(false);setPwDialog({type:"enc-settings"});
     }}/>}
 
-  {pwDialog?.type==="change-pw"&&<PasswordDialog
+  {pwDialog?.type==="change-pw"&&<PasswordDialog dark={dark}
     title="Change Password — Step 1" subtitle="Enter your current password."
     confirmLabel="Next" error={pwError}
     onCancel={()=>{setPwDialog({type:"enc-settings"});setPwError("")}}
@@ -961,7 +1230,7 @@ function NoteForge(){
       setPwDialog({type:"change-pw-new",oldPw});
     }}/>}
 
-  {pwDialog?.type==="change-pw-new"&&<PasswordDialog
+  {pwDialog?.type==="change-pw-new"&&<PasswordDialog dark={dark}
     title="Change Password — Step 2" subtitle="Choose your new password."
     confirmLabel="Change Password" showConfirm error={pwError}
     onCancel={()=>{setPwDialog({type:"enc-settings"});setPwError("")}}
@@ -972,7 +1241,7 @@ function NoteForge(){
       setPwDialog({type:"enc-settings"});
     }}/>}
 
-  {pwDialog?.type==="lock-nb"&&<PasswordDialog
+  {pwDialog?.type==="lock-nb"&&<PasswordDialog dark={dark}
     title="Lock Notebook" subtitle={`Set a password for "${pwDialog.name}".`}
     confirmLabel="Lock" showConfirm error={pwError}
     onCancel={()=>{setPwDialog(null);setPwError("")}}
@@ -983,7 +1252,7 @@ function NoteForge(){
       setPwDialog(null);
     }}/>}
 
-  {pwDialog?.type==="unlock-nb"&&<PasswordDialog
+  {pwDialog?.type==="unlock-nb"&&<PasswordDialog dark={dark}
     title="Unlock Notebook" subtitle={`Enter password for "${pwDialog.name}".`}
     confirmLabel="Unlock" error={pwError}
     onCancel={()=>{setPwDialog(null);setPwError("")}}
@@ -1131,7 +1400,13 @@ function NoteForge(){
   {/* ── Panel 3: Editor ────────────────────────────────────── */}
   <div className="nf-editor-wrap">
     {showTrash?<div style={{flex:1,overflowY:"auto",padding:28}}>
-      <h2 style={{fontSize:20,fontWeight:700,marginBottom:16,display:"flex",alignItems:"center",gap:8}}><I n="trash" s={20}/> Trash</h2>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+        <h2 style={{fontSize:20,fontWeight:700,display:"flex",alignItems:"center",gap:8,flex:1,margin:0}}><I n="trash" s={20}/> Trash</h2>
+        {trashPages.length>0&&<button className="nf-trash-btn" onClick={emptyTrash}
+          style={{border:"1px solid var(--danger)",background:"transparent",color:"var(--danger)",fontWeight:600}}>
+          Empty Trash ({trashPages.length})
+        </button>}
+      </div>
       {!trashPages.length?<div style={{color:"var(--text-muted)",padding:48,textAlign:"center"}}>Trash is empty</div>
         :trashPages.map(p=><div key={p.id} className="nf-trash-item">
           <div style={{flex:1}}>
@@ -1146,8 +1421,8 @@ function NoteForge(){
       <div className="nf-toolbar">
         <Btn icon="undo" label="Undo" onClick={()=>exec("undo")} s={13}/>
         <Btn icon="redo" label="Redo" onClick={()=>exec("redo")} s={13}/><div className="tb-sep"/>
-        <Sel value="div" opts={HEADINGS.map(h=>({l:h.l,v:h.v}))} onChange={v=>exec("formatBlock",v)} w={60}/>
-        <Sel value="3" opts={FONT_SIZES.map(f=>({l:f.l+"px",v:f.v}))} onChange={v=>exec("fontSize",v)} w={58}/><div className="tb-sep"/>
+        <Sel value={HEADINGS.some(h=>h.v===toolbarFmt.block)?toolbarFmt.block:"div"} opts={HEADINGS.map(h=>({l:h.l,v:h.v}))} onChange={v=>exec("formatBlock",v)} w={60}/>
+        <Sel value={FONT_SIZES.some(f=>f.v===toolbarFmt.size)?toolbarFmt.size:"3"} opts={FONT_SIZES.map(f=>({l:f.l+"px",v:f.v}))} onChange={v=>exec("fontSize",v)} w={58}/><div className="tb-sep"/>
         <Btn icon="bold" label="Bold" onClick={()=>exec("bold")} s={13}/>
         <Btn icon="italic" label="Italic" onClick={()=>exec("italic")} s={13}/>
         <Btn icon="underline" label="Underline" onClick={()=>exec("underline")} s={13}/>
@@ -1223,8 +1498,11 @@ function NoteForge(){
           <div className="nf-ctx-sep"/>
           <div className="nf-ctx-item" onClick={()=>{setPwDialog({type:"lock-nb",nbId:ctx.id,name:found.item.name});setCtx(null)}}><I n="lock" s={13}/> Set Password</div>
         </>}
-        {hasElectronCrypto()&&found.item.locked&&<>
+        {hasElectronCrypto()&&found.item.locked&&unlockedNbs.has(ctx.id)&&<>
           <div className="nf-ctx-sep"/>
+          <div className="nf-ctx-item" onClick={()=>{relockNotebook(ctx.id);setCtx(null)}}><I n="lock" s={13}/> Re-lock Now</div>
+        </>}
+        {hasElectronCrypto()&&found.item.locked&&<>
           <div className="nf-ctx-item" onClick={()=>{removeNotebookLock(ctx.id);setCtx(null)}}><I n="unlock" s={13}/> Remove Password</div>
         </>}
         <div className="nf-ctx-sep"/><div className="nf-ctx-item danger" onClick={()=>{delNotebook(ctx.id);setCtx(null)}}><I n="trash" s={13}/> Delete Notebook</div>
@@ -1254,6 +1532,40 @@ function NoteForge(){
       <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doCmd("removeFormat")}><I n="eraser" s={13}/> Clear Formatting</div>
     </div>;
   })()}
+
+  {/* ═══ CUSTOM MODAL DIALOGS (confirm/prompt/alert/shortcuts) ═════ */}
+  {confirmDialog&&<ConfirmDialog dark={dark}
+    title={confirmDialog.title} message={confirmDialog.message}
+    confirmLabel={confirmDialog.confirmLabel} confirmStyle={confirmDialog.confirmStyle}
+    onConfirm={()=>{const r=confirmDialog.resolve;setConfirmDialog(null);r(true)}}
+    onCancel={()=>{const r=confirmDialog.resolve;setConfirmDialog(null);r(false)}}/>}
+  {promptDialog&&<PromptDialog dark={dark}
+    title={promptDialog.title} message={promptDialog.message}
+    placeholder={promptDialog.placeholder} defaultValue={promptDialog.defaultValue}
+    confirmLabel={promptDialog.confirmLabel}
+    onConfirm={val=>{const r=promptDialog.resolve;setPromptDialog(null);r(val)}}
+    onCancel={()=>{const r=promptDialog.resolve;setPromptDialog(null);r(null)}}/>}
+  {alertDialog&&<AlertDialog dark={dark}
+    title={alertDialog.title} message={alertDialog.message}
+    onClose={()=>{const r=alertDialog.resolve;setAlertDialog(null);if(r)r()}}/>}
+  {showShortcuts&&<ShortcutsDialog dark={dark} onClose={()=>setShowShortcuts(false)}/>}
+
+  {/* ═══ RESTORE BACKUP — password verified BEFORE clobbering current data ═══ */}
+  {restoreFlow&&<PasswordDialog dark={dark}
+    title="Verify Backup Password"
+    subtitle="Enter the password for the backup file. Your current data will be kept if this fails."
+    confirmLabel="Restore Backup" error={pwError}
+    onCancel={()=>{setRestoreFlow(null);setPwError("")}}
+    onSubmit={async pw=>{
+      setPwError("");
+      const r=await window.electronAPI.verifyAndRestoreBackup(restoreFlow.backupPath,pw);
+      if(r?.error){setPwError(r.error);return}
+      setRestoreFlow(null);
+      if(r?.needsRestart){
+        dataRef.current=null;setData(null);setEncEnabled(true);setAppPhase("needsPassword");
+        await alertUser({title:"Restore complete",message:"Enter the backup password to unlock your restored data."+(r.rollbackPath?"\n\nYour previous data was saved as a rollback file next to your data folder.":"")});
+      }
+    }}/>}
 
   </div>);
 }
