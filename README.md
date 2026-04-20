@@ -187,6 +187,10 @@ Open an [issue](https://github.com/jamesccupps/NoteForge/issues) for bugs and fe
 
 See [CHANGELOG.md](CHANGELOG.md).
 
+## Contact
+
+Open an [issue](https://github.com/jamesccupps/NoteForge/issues) for bugs and feature requests. For security reports or general questions, email <jamesccupps@proton.me>.
+
 ## License
 
 [MIT](LICENSE) — James Cupps
