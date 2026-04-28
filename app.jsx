@@ -552,6 +552,7 @@ function NoteForge(){
     nbKeys.current.clear();
     dataRef.current=null;setData(null);setANb(null);setASec(null);setAPg(null);
     setUnlockedNbs(new Set());
+    prevPgRef.current=null; // Force editor to repaint content after unlock even if we land on the same page id
     if(encEnabled)setAppPhase("needsPassword");
   },[encEnabled]);
 
@@ -831,7 +832,7 @@ function NoteForge(){
       }
     });
     return cleanup;
-  },[]);
+  },[encEnabled,lockApp]);
 
   // Track cursor format for heading/font-size select reflection
   useEffect(()=>{

@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+## [2.7.2] — 2026-04-28
+
+### Fixed
+- **File → Lock App menu item** now actually locks the app. The menu-action listener was registered with an empty dependency array, so its handler captured the initial `encEnabled = false` closure and the lock branch never fired. The Ctrl+L shortcut was unaffected because its listener already tracked `encEnabled` and `lockApp` in its deps.
+- **Editor content blank after unlock** when the unlock landed on the same page the user was viewing before locking. The editor's `prevPgRef` guard wasn't reset on lock (the sync effect early-returns when `edRef.current` is null during the password-dialog phase), so after unlock `aPg === prevPgRef.current` and the `innerHTML` write was skipped. `lockApp` now clears `prevPgRef.current` so the next paint always fires.
+
 ## [2.6.1] — 2026-04-16
 
 Security hardening round plus a cross-notebook bug fix and Windows taskbar polish.
