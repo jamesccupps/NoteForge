@@ -258,10 +258,13 @@ function sanitizeForDiskSync(data) {
 /* ── Editor HTML for saving ─────────────────────────────────────
    Chromium's list commands build <p><ul>…</ul></p>. That renders fine live, but the
    HTML parser turns it into empty paragraphs around the list on reload. Save an
-   unwrapped copy; the live DOM (and so the browser's undo history) is left alone. */
+   unwrapped copy (and drop empty to-do wrappers); the live DOM, and so the browser's
+   undo history, is left alone. */
 function serializeEditor(el) {
-  if (!el.querySelector("p>ul,p>ol,div>ul,div>ol")) return el.innerHTML;
+  if (!el.querySelector("p>ul,p>ol,div>ul,div>ol,.nf-check:not(:has(input))")) return el.innerHTML;
   const c = el.cloneNode(true);
+  // Empty to-do wrappers left by deleting an item
+  for (const w of [...c.querySelectorAll(".nf-check:not(:has(input))")]) if (!w.textContent.trim()) w.remove();
   for (const w of [...c.querySelectorAll("p,div")]) {
     if (w.classList.contains("nf-check")) continue;
     const kids = [...w.childNodes].filter(n => !(n.nodeType === 3 && !n.textContent.trim()));
@@ -1832,6 +1835,42 @@ function NoteForge() {
       const sel = window.getSelection();
       if (sel.rangeCount && sel.isCollapsed && edRef.current?.contains(sel.anchorNode)) {
         const el = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+        // To-do items: Enter adds a new empty item below; Enter on an empty item turns it
+        // back into a normal line. (Before, Enter made a second <label> tied to the same
+        // checkbox inside the same item.)
+        const chk = el.closest(".nf-check");
+        if (chk && edRef.current.contains(chk)) {
+          e.preventDefault();
+          // Native insertion after the item only lands as a sibling if something follows it;
+          // at the end of the note the browser nests it inside the item instead. Appending one
+          // empty paragraph leaves every existing node (and so the undo history) untouched.
+          if (!chk.nextSibling) {
+            const p = document.createElement("p");
+            p.appendChild(document.createElement("br"));
+            chk.after(p);
+          }
+          if (!chk.querySelector("label")?.textContent.trim()) {
+            // delete leaves an empty <div class="nf-check"> behind; serializeEditor drops it
+            const nxt = chk.nextSibling;
+            const r = document.createRange();
+            r.selectNode(chk);
+            sel.removeAllRanges();
+            sel.addRange(r);
+            document.execCommand("delete");
+            sel.collapse(nxt, 0);
+            document.execCommand("insertHTML", false, "<p><br></p>");
+          } else {
+            const id = uid();
+            sel.collapse(chk.parentNode, [...chk.parentNode.childNodes].indexOf(chk) + 1);
+            document.execCommand("insertHTML", false, `<div class="nf-check"><input type="checkbox" id="${id}"><label for="${id}"><br></label></div>`);
+            const lb = edRef.current.querySelector(`label[for="${id}"]`);
+            if (lb) {
+              sel.selectAllChildren(lb);
+              sel.collapseToStart();
+            }
+          }
+          return;
+        }
         const pre = el.closest("pre");
         if (pre && edRef.current.contains(pre) && caretOnEmptyLastLine(pre, sel)) {
           e.preventDefault();
@@ -2594,7 +2633,10 @@ function NoteForge() {
   '<table><tr><td><br></td><td><br></td><td><br></td></tr><tr><td><br></td><td><br></td><td><br></td></tr><tr><td><br></td><td><br></td><td><br></td></tr></table><p><br></p>');
   const insertCheck = () => {
     const id = uid();
-    exec("insertHTML", `<div class="nf-check"><input type="checkbox" id="${id}"><label for="${id}">To-do item</label></div>`);
+    exec("insertHTML", `<div class="nf-check"><input type="checkbox" id="${id}"><label for="${id}">To-do item</label></div><p><br></p>`);
+    // Select the placeholder so typing replaces it
+    const lb = edRef.current?.querySelector(`label[for="${id}"]`);
+    if (lb) window.getSelection().selectAllChildren(lb);
   };
   const insertLink = async () => {
     const sel = window.getSelection();
@@ -3711,6 +3753,9 @@ function NoteForge() {
         t.toggleAttribute("checked", t.checked);
         onInput();
       }
+      // A to-do's text is a <label for=…>, so clicking it to edit toggled the box.
+      // Suppress the label's activation; the caret is already placed on mousedown.
+      else if (t.closest?.(".nf-check label")) e.preventDefault();
     },
     onContextMenu: e => {
       e.preventDefault();

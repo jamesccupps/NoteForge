@@ -659,6 +659,54 @@ SCENARIOS.exitCodeAndQuote = {
   },
 };
 
+SCENARIOS.checklistEditing = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = "<p>tasks</p>";
+    return d;
+  },
+  async run(c) {
+    const key = async (keyCode, modifiers = []) => {
+      c.win.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
+      if (keyCode === "Enter") c.win.webContents.sendInputEvent({ type: "char", keyCode: "\r", modifiers });
+      c.win.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
+      await c.sleep(200);
+    };
+    const type = async (t) => { for (const ch of t) c.win.webContents.sendInputEvent({ type: "char", keyCode: ch }); await c.sleep(250); };
+    const items = () => c.js(`[...document.querySelectorAll(".nf-editor .nf-check")].filter(d=>d.querySelector("input")).map(d=>d.querySelectorAll("input").length+":"+[...d.querySelectorAll("label")].map(l=>l.textContent).join("+")).join(" | ")`);
+    await c.waitFor(`document.querySelector(".nf-editor p")`);
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const t=ed.querySelector("p").firstChild;getSelection().collapse(t,t.textContent.length)})()`);
+    await key("Enter");
+    await realClick(c, `document.querySelector('.nf-toolbar button[title="Checklist"]')`);
+    await type("milk");
+    c.check("typing replaces the 'To-do item' placeholder", (await items()) === "1:milk", await items());
+    await key("Enter"); await type("eggs");
+    c.check("Enter starts a new to-do item", (await items()) === "1:milk | 1:eggs", await items());
+    await key("Enter"); await key("Enter"); await type("done");
+    c.check("Enter on an empty to-do returns to normal text", (await items()) === "1:milk | 1:eggs" && /<\/div>(<div class="nf-check"><\/div>)?<p>done<\/p>$/.test(await c.js(`document.querySelector(".nf-editor").innerHTML`)),
+      (await items()) + " :: " + (await c.js(`document.querySelector(".nf-editor").innerHTML`)).slice(-80));
+    const savedTodo = (await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes("done"))).notebooks[0].sections[0].pages[0].content;
+    c.check("saved without the leftover empty to-do wrapper", !/<div class="nf-check"><\/div>/.test(savedTodo) && /eggs<\/label><\/div><p>done<\/p>$/.test(savedTodo), savedTodo.slice(-120));
+    for (let i = 0; i < 3; i++) {
+      c.win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Z", modifiers: ["control"] });
+      c.win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Z", modifiers: ["control"] });
+      await c.sleep(150);
+    }
+    // 3 undos: the typing, the exit, the delete; every item keeps exactly one checkbox
+    c.check("undo steps back without mangling the items", /^1:milk \| 1:eggs( \| 1:)?$/.test(await items()), await items());
+    for (let i = 0; i < 3; i++) {
+      c.win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Y", modifiers: ["control"] });
+      c.win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Y", modifiers: ["control"] });
+      await c.sleep(150);
+    }
+    const labels = `document.querySelectorAll(".nf-editor .nf-check label")`;
+    await realClick(c, `${labels}[0]`);
+    c.check("clicking a to-do's text doesn't toggle it", !(await c.js(`document.querySelectorAll(".nf-editor .nf-check input")[0].checked`)));
+    await realClick(c, `document.querySelectorAll(".nf-editor .nf-check input")[1]`);
+    c.check("clicking the box still toggles", await c.js(`document.querySelectorAll(".nf-editor .nf-check input")[1].checked`));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"
