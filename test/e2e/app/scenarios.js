@@ -228,4 +228,35 @@ SCENARIOS.menuExport = {
   },
 };
 
+const BACKUP_PW = "Backup#Passphrase-2026";
+SCENARIOS.restoreBackup = {
+  messageBoxResponse: 0, // "Choose Backup…"
+  seed: seedBase,
+  openDialog: (tmp) => {
+    const fs = require("fs"), path = require("path");
+    const file = path.join(tmp, "picked-backup.enc");
+    const data = { notebooks: [{ id: "nb-r", name: "Restored", color: "#1cb888", sections: [{ id: "sec-r", name: "R", color: "#1cb888",
+      pages: [page("pg-r", "Restored page", "<p>from the backup</p>")] }] }] };
+    fs.writeFileSync(file, encryptBlob(JSON.stringify(data), BACKUP_PW));
+    return { canceled: false, filePaths: [file] };
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    c.menu("restore-backup");
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Verify Backup Password"`);
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, "wrong-password-1"));
+    await c.js(`${R.button(".nf-overlay-btn", "Restore Backup")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-overlay-error")`);
+    c.check("wrong backup password shows an error", true);
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
+    await c.js(`${R.button(".nf-overlay-btn", "Restore Backup")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Unlock NoteForge"`);
+    c.check("restore leads to the unlock screen", true);
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
+    await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
+    await c.waitFor(`${R.editorText}.includes("from the backup")`);
+    c.check("restored notes open with the backup password", true);
+  },
+};
+
 module.exports = { SCENARIOS, R, NB_PW, seedBase, seedLocked, unlockNotebook };

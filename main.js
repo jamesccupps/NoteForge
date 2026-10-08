@@ -553,7 +553,20 @@ ipcMain.handle("export-backup", async () => {
   } catch (e) { return { error: e.message }; }
 });
 
+// The file the user picked in restore-backup. verify-and-restore-backup only accepts
+// this path, so a compromised renderer can't point main at some other blob on disk
+// (e.g. a v1 file, which decryptData still accepts) and install it as the vault.
+let pendingRestorePath = null;
+
+function backupHeaderError(obj) {
+  if (!obj || !obj.data || !obj.salt || !obj.iv || !obj.tag) return "Invalid backup file";
+  if (obj.v !== 2 || obj.kdf !== "scrypt") return "Unsupported backup format";
+  if (typeof obj.N !== "number" || obj.N < MIN_SCRYPT_N) return "Backup uses weakened encryption";
+  return null;
+}
+
 ipcMain.handle("restore-backup", async () => {
+  pendingRestorePath = null;
   const warn = await dialog.showMessageBox(mainWindow, {
     type: "warning", title: "Restore Backup",
     message: "This will replace ALL current data.",
@@ -570,11 +583,10 @@ ipcMain.handle("restore-backup", async () => {
     const src = result.filePaths[0];
     // Validate it's actually encrypted data — reject anything that isn't a v2 scrypt blob
     const raw = fs.readFileSync(src, "utf-8");
-    const obj = JSON.parse(raw);
-    if (!obj.data || !obj.salt || !obj.iv || !obj.tag) return { error: "Invalid backup file" };
-    if (obj.v !== 2 || obj.kdf !== "scrypt") return { error: "Unsupported backup format" };
-    if (typeof obj.N !== "number" || obj.N < MIN_SCRYPT_N) return { error: "Backup uses weakened encryption" };
-    // Return the raw so renderer can prompt for password and call verify-and-restore
+    const headerErr = backupHeaderError(JSON.parse(raw));
+    if (headerErr) return { error: headerErr };
+    pendingRestorePath = src;
+    // Renderer prompts for the backup password, then calls verify-and-restore-backup
     return { readyForPassword: true, backupPath: src, hasHint: fs.existsSync(src + ".hint") };
   } catch (e) { return { error: "Invalid backup file: " + e.message }; }
 });
@@ -582,10 +594,13 @@ ipcMain.handle("restore-backup", async () => {
 // Two-step restore — password verified BEFORE we touch current data.
 // If verification fails, current encFile is untouched.
 ipcMain.handle("verify-and-restore-backup", async (_e, backupPath, password) => {
-  if (!backupPath || typeof backupPath !== "string") return { error: "Invalid backup path" };
+  if (!pendingRestorePath || backupPath !== pendingRestorePath) return { error: "Choose the backup file again (File → Restore from Backup…)" };
   if (!fs.existsSync(backupPath)) return { error: "Backup file no longer exists" };
   try {
     const raw = fs.readFileSync(backupPath, "utf-8");
+    // Re-check: the file may have changed since the user picked it
+    const headerErr = backupHeaderError(JSON.parse(raw));
+    if (headerErr) return { error: headerErr };
     // Test-decrypt — if this throws, the password is wrong and we do NOTHING destructive
     const result = decryptData(raw, password);
     result.key.fill(0); // zero the test key immediately; we'll re-derive on next unlock
@@ -603,6 +618,7 @@ ipcMain.handle("verify-and-restore-backup", async (_e, backupPath, password) => 
     // Remove plain file if exists
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
     lockSession();
+    pendingRestorePath = null;
     return { success: true, needsRestart: true, rollbackPath: fs.existsSync(rollbackPath) ? rollbackPath : null };
   } catch (e) {
     return { error: "Could not decrypt backup — wrong password or corrupted file" };
