@@ -121,6 +121,26 @@ function lockSession() {
   nbSessionKeys.clear();
 }
 
+/* ── Atomic data-file writes ─────────────────────────────────
+   Every save rewrites the whole data file. Writing in place meant a crash or
+   power loss mid-write left a truncated file, and for the encrypted file that
+   makes every note unrecoverable (GCM rejects the whole blob). Write a temp
+   file, fsync it, then rename over the original. */
+function writeFileAtomic(file, data) {
+  const tmp = file + ".tmp";
+  const fd = fs.openSync(tmp, "w");
+  try { fs.writeFileSync(fd, data, "utf-8"); fs.fsyncSync(fd); }
+  finally { fs.closeSync(fd); }
+  try { fs.renameSync(tmp, file); }
+  catch (e) {
+    // Windows refuses the rename while another process (AV scanner, sync client)
+    // has the target open without delete sharing. Fall back to the old in-place
+    // write rather than failing the save.
+    try { fs.unlinkSync(tmp); } catch {}
+    fs.writeFileSync(file, data, "utf-8");
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════
    SERVER-SIDE DATA SANITIZATION
    ═══════════════════════════════════════════════════════════════ */
@@ -317,12 +337,12 @@ ipcMain.handle("storage-get", async () => {
 function writeAppData(value) {
   if (typeof value !== "string") return false;
   if (sessionKey) {
-    fs.writeFileSync(encFile, encryptWithSession(value), "utf-8");
+    writeFileAtomic(encFile, encryptWithSession(value));
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
     return true;
   }
   if (fs.existsSync(encFile)) return false;
-  fs.writeFileSync(plainFile, value, "utf-8");
+  writeFileAtomic(plainFile, value);
   return true;
 }
 
@@ -351,7 +371,7 @@ ipcMain.handle("unlock-master", async (_e, password) => {
     if (result.isV1) {
       result.key.fill(0); // discard v1 key
       const v2enc = encryptData(result.plaintext, password);
-      fs.writeFileSync(encFile, v2enc, "utf-8");
+      writeFileAtomic(encFile, v2enc);
       // Now derive the session key from the v2 file
       const v2obj = JSON.parse(v2enc);
       sessionSalt = Buffer.from(v2obj.salt, "hex");
@@ -374,7 +394,7 @@ ipcMain.handle("enable-encryption", async (_e, password, hint) => {
     // Sanitize before encrypting
     data = sanitizeDataJson(data);
     const enc = encryptData(data, password);
-    fs.writeFileSync(encFile, enc, "utf-8");
+    writeFileAtomic(encFile, enc);
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
     // Cache new session key
     const obj = JSON.parse(enc);
@@ -394,7 +414,7 @@ ipcMain.handle("disable-encryption", async (_e, password) => {
     const result = decryptData(fs.readFileSync(encFile, "utf-8"), password);
     result.key.fill(0);
     // Sanitize before writing plaintext
-    fs.writeFileSync(plainFile, sanitizeDataJson(result.plaintext), "utf-8");
+    writeFileAtomic(plainFile, sanitizeDataJson(result.plaintext));
     fs.unlinkSync(encFile);
     if (fs.existsSync(hintFile)) fs.unlinkSync(hintFile);
     lockSession();
@@ -415,7 +435,7 @@ ipcMain.handle("change-master-password", async (_e, oldPassword, newPassword) =>
     // Re-encrypt with new password, sanitize
     const sanitized = sanitizeDataJson(result.plaintext);
     const enc = encryptData(sanitized, newPassword);
-    fs.writeFileSync(encFile, enc, "utf-8");
+    writeFileAtomic(encFile, enc);
     // Cache new session key
     const obj = JSON.parse(enc);
     if (sessionKey) sessionKey.fill(0);
@@ -563,7 +583,7 @@ ipcMain.handle("verify-and-restore-backup", async (_e, backupPath, password) => 
     if (fs.existsSync(encFile)) {
       try { fs.copyFileSync(encFile, rollbackPath); } catch {}
     }
-    fs.copyFileSync(backupPath, encFile);
+    writeFileAtomic(encFile, raw); // the bytes that just decrypted, not a re-read of the path
     // Restore hint if exists
     if (fs.existsSync(backupPath + ".hint")) {
       fs.writeFileSync(hintFile, fs.readFileSync(backupPath + ".hint", "utf-8"), "utf-8");
