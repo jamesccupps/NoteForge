@@ -506,6 +506,60 @@ SCENARIOS.fontSizes = {
   },
 };
 
+SCENARIOS.listButtons = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = "<p>first line here</p><p>second</p>";
+    return d;
+  },
+  async run(c) {
+    const html = () => c.js(`document.querySelector(".nf-editor").innerHTML`);
+    const caretEnd = (text) => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const w=document.createTreeWalker(ed,NodeFilter.SHOW_TEXT);
+      while(w.nextNode()){const n=w.currentNode;if(n.textContent.includes(${JSON.stringify(text)})){getSelection().collapse(n,n.textContent.length);return}}})()`);
+    const typeChar = async (ch) => { c.win.webContents.sendInputEvent({ type: "char", keyCode: ch }); await c.sleep(150); };
+    const tb = (title) => `document.querySelector('.nf-toolbar button[title=${JSON.stringify(title)}]')`;
+    await c.waitFor(`document.querySelector(".nf-editor p")`);
+
+    const clean = "<ul><li>first line hereX</li></ul><ol><li>secondY</li></ol>";
+    await caretEnd("first line here");
+    await realClick(c, tb("Bullet List"));
+    await typeChar("X");
+    c.check("bullet list: caret stays at the end of the line", /<li>first line hereX<\/li>/.test(await html()), await html());
+    await caretEnd("second");
+    await realClick(c, tb("Numbered List"));
+    await typeChar("Y");
+    c.check("numbered list: same", /<li>secondY<\/li>/.test(await html()), await html());
+    const saved = (await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes("secondY"))).notebooks[0].sections[0].pages[0].content;
+    c.check("saved without the <p><ul> nesting", saved === clean, saved);
+    const trash = `[...document.querySelectorAll(".nf-add-btn")].find(e=>e.textContent.startsWith("Trash"))`;
+    await c.js(`${trash}.click()`); await c.sleep(200); await c.js(`${trash}.click()`); await c.sleep(300);
+    c.check("reloads without stray empty paragraphs", (await html()) === clean, await html());
+    await caretEnd("secondY");
+    await realClick(c, tb("Numbered List"));
+    await typeChar("Z");
+    c.check("clicking again turns the item back into text, caret kept", /secondYZ/.test(await html()) && !/<ol>/.test(await html()), await html());
+  },
+};
+
+SCENARIOS.listButtonUndo = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = "<p>first line here</p><p>second</p>";
+    return d;
+  },
+  async run(c) {
+    const html = () => c.js(`document.querySelector(".nf-editor").innerHTML`);
+    await c.waitFor(`document.querySelector(".nf-editor p")`);
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const t=ed.querySelector("p").firstChild;getSelection().collapse(t,t.textContent.length)})()`);
+    await realClick(c, `document.querySelector('.nf-toolbar button[title="Bullet List"]')`);
+    c.win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Z", modifiers: ["control"] });
+    c.win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Z", modifiers: ["control"] });
+    await c.sleep(300);
+    c.check("Ctrl+Z after a list button keeps the text and removes the list", (await html()).includes("first line here") && !(await html()).includes("<li>"), await html());
+    c.check("no text lost or duplicated", (await c.js(R.editorText)).replace(/\s+/g, " ").trim() === "first line here second", await c.js(R.editorText));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

@@ -167,6 +167,21 @@ function sanitizeForDiskSync(data){
   })};
 }
 
+/* ── Editor HTML for saving ─────────────────────────────────────
+   Chromium's list commands build <p><ul>…</ul></p>. That renders fine live, but the
+   HTML parser turns it into empty paragraphs around the list on reload. Save an
+   unwrapped copy; the live DOM (and so the browser's undo history) is left alone. */
+function serializeEditor(el){
+  if(!el.querySelector("p>ul,p>ol,div>ul,div>ol"))return el.innerHTML;
+  const c=el.cloneNode(true);
+  for(const w of [...c.querySelectorAll("p,div")]){
+    if(w.classList.contains("nf-check"))continue;
+    const kids=[...w.childNodes].filter(n=>!(n.nodeType===3&&!n.textContent.trim()));
+    if(kids.length&&kids.every(n=>n.nodeName==="UL"||n.nodeName==="OL"))w.replaceWith(...w.childNodes);
+  }
+  return c.innerHTML;
+}
+
 /* ── Image downscale helper ────────────────────────────────────
    Large pasted photos are resized to IMG_DOWNSCALE_TARGET_WIDTH and
    re-encoded as JPEG. Keeps the encrypted data file lean. */
@@ -754,10 +769,36 @@ function NoteForge(){
   },[persist]);
   const onInput=useCallback(()=>{
     if(!edRef.current||!dataRef.current||!aPg)return;
-    updatePage(aPg,()=>({content:edRef.current.innerHTML,modified:Date.now()}));updStats();
+    updatePage(aPg,()=>({content:serializeEditor(edRef.current),modified:Date.now()}));updStats();
   },[aPg,updatePage,updStats]);
   const exec=useCallback((cmd,val=null)=>{
     edRef.current?.focus();document.execCommand(cmd,false,val);setTimeout(()=>onInput(),10);
+  },[onInput]);
+  // Chromium's insert(Un)orderedList drops the caret at the start of the item. Put a
+  // collapsed caret back at the same text offset. Only the selection is touched: editing
+  // the DOM here (e.g. unwrapping the <p><ul> it builds) broke undo and lost the text.
+  // The <p><ul> nesting itself is cleaned up when saving (serializeEditor).
+  const toggleList=useCallback((cmd)=>{
+    const ed=edRef.current;if(!ed)return;
+    ed.focus();
+    const sel=window.getSelection();
+    const BLOCK=/^(P|DIV|LI|H[1-6]|BLOCKQUOTE|PRE)$/;
+    const blockOf=(n)=>{while(n&&n!==ed){if(n.nodeType===1&&BLOCK.test(n.nodeName))return n;n=n.parentNode}return null};
+    let caretOff=-1;
+    if(sel.rangeCount&&sel.isCollapsed&&ed.contains(sel.anchorNode)){
+      const b=blockOf(sel.anchorNode);
+      if(b){const pre=document.createRange();pre.selectNodeContents(b);pre.setEnd(sel.anchorNode,sel.anchorOffset);caretOff=pre.toString().length}
+    }
+    document.execCommand(cmd);
+    if(caretOff>=0&&sel.rangeCount){
+      const b=blockOf(sel.anchorNode);
+      if(b){
+        const tw=document.createTreeWalker(b,NodeFilter.SHOW_TEXT);let left=caretOff,placed=false;
+        while(tw.nextNode()){const t=tw.currentNode;if(left<=t.textContent.length){sel.collapse(t,left);placed=true;break}left-=t.textContent.length}
+        if(!placed){sel.selectAllChildren(b);sel.collapseToEnd()}
+      }
+    }
+    setTimeout(()=>onInput(),10);
   },[onInput]);
 
   /* ── Paste ───────────────────────────────────────────────── */
@@ -1533,8 +1574,8 @@ function NoteForge(){
         <Btn icon="eraser" label="Clear Formatting" onClick={()=>exec("removeFormat")} s={13}/><div className="tb-sep"/>
         <CPick colors={TXT_COLORS} onChange={c=>exec("foreColor",c)} label="Text Color"/>
         <CPick colors={HL_COLORS} onChange={c=>exec("hiliteColor",c)} label="Highlight"/><div className="tb-sep"/>
-        <Btn icon="ul" label="Bullet List" onClick={()=>exec("insertUnorderedList")} s={13}/>
-        <Btn icon="ol" label="Numbered List" onClick={()=>exec("insertOrderedList")} s={13}/>
+        <Btn icon="ul" label="Bullet List" onClick={()=>toggleList("insertUnorderedList")} s={13}/>
+        <Btn icon="ol" label="Numbered List" onClick={()=>toggleList("insertOrderedList")} s={13}/>
         <Btn icon="check" label="Checklist" onClick={insertCheck} s={13}/>
         <Btn icon="indent" label="Indent" onClick={()=>exec("indent")} s={13}/>
         <Btn icon="outdent" label="Outdent" onClick={()=>exec("outdent")} s={13}/><div className="tb-sep"/>
