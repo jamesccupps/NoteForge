@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+## [2.8.0] — 2026-10-08
+
 Audit pass. Every fix below was reproduced against 2.7.2 first and has a regression test that fails on the old code.
 
 ### Fixed — data loss

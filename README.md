@@ -28,7 +28,7 @@
 
 ## What's new
 
-Full history is in [CHANGELOG.md](CHANGELOG.md). On `main`, not yet released:
+Full history is in [CHANGELOG.md](CHANGELOG.md). In 2.8.0:
 
 - **Data-loss fixes:**
   - "Remove Password" on a still-locked notebook no longer deletes its pages.
