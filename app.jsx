@@ -1504,6 +1504,12 @@ function NoteForge(){
       </div>
       <div ref={attachEditor} className="nf-editor" contentEditable suppressContentEditableWarning
         onInput={onInput} onPaste={onPaste} onKeyDown={onKeyDown}
+        onClick={e=>{
+          // A ticked checkbox only changes its .checked property, which innerHTML doesn't
+          // include, so checklist state was never saved. Mirror it into the attribute.
+          const t=e.target;
+          if(t.tagName==="INPUT"&&t.type==="checkbox"){t.toggleAttribute("checked",t.checked);onInput()}
+        }}
         onContextMenu={e=>{e.preventDefault();setEdCtx({x:e.clientX,y:e.clientY});setCtx(null)}}
         style={{fontSize:`${14*zoom/100}px`,whiteSpace:wrap?"pre-wrap":"pre",overflowX:wrap?"hidden":"auto",wordWrap:wrap?"break-word":"normal"}}/>
     </>

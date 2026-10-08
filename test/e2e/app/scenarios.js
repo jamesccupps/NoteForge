@@ -364,6 +364,35 @@ SCENARIOS.listTabIndent = {
   },
 };
 
+// Real mouse click at an element's centre (sendInputEvent), for things where the browser's
+// own default behaviour matters (checkbox toggling, focus moves).
+async function realClick(c, expr) {
+  const r = await c.js(`(()=>{const e=${expr};const b=e.getBoundingClientRect();return {x:Math.round(b.left+b.width/2),y:Math.round(b.top+b.height/2)}})()`);
+  c.win.webContents.sendInputEvent({ type: "mouseDown", x: r.x, y: r.y, button: "left", clickCount: 1 });
+  c.win.webContents.sendInputEvent({ type: "mouseUp", x: r.x, y: r.y, button: "left", clickCount: 1 });
+  await c.sleep(250);
+}
+
+SCENARIOS.checklistTickSaved = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = '<div class="nf-check"><input type="checkbox" id="t1"><label for="t1">buy milk</label></div>';
+    return d;
+  },
+  async run(c) {
+    const box = `document.querySelector(".nf-editor .nf-check input")`;
+    const saved = (pred) => c.waitForData((d) => pred(d.notebooks[0].sections[0].pages[0].content));
+    await c.waitFor(box);
+    await realClick(c, box);
+    c.check("tick is saved", /<input[^>]*checked/.test((await saved((s) => /checked/.test(s))).notebooks[0].sections[0].pages[0].content));
+    const trash = `[...document.querySelectorAll(".nf-add-btn")].find(e=>e.textContent.startsWith("Trash"))`;
+    await c.js(`${trash}.click()`); await c.sleep(200); await c.js(`${trash}.click()`); await c.sleep(300);
+    c.check("tick survives the editor reloading the page", await c.js(`${box}.checked`));
+    await realClick(c, box);
+    c.check("untick is saved", !/checked/.test((await saved((s) => !/checked/.test(s))).notebooks[0].sections[0].pages[0].content));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

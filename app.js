@@ -3444,6 +3444,15 @@ function NoteForge() {
     onInput: onInput,
     onPaste: onPaste,
     onKeyDown: onKeyDown,
+    onClick: e => {
+      // A ticked checkbox only changes its .checked property, which innerHTML doesn't
+      // include, so checklist state was never saved. Mirror it into the attribute.
+      const t = e.target;
+      if (t.tagName === "INPUT" && t.type === "checkbox") {
+        t.toggleAttribute("checked", t.checked);
+        onInput();
+      }
+    },
     onContextMenu: e => {
       e.preventDefault();
       setEdCtx({
