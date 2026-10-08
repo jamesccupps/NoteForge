@@ -731,6 +731,17 @@ function NoteForge(){
       setStats({w:t.trim()?t.trim().split(/\s+/).length:0,c:t.length,l:t.split("\n").length});
     },120);
   },[]);
+  // Callback ref for the editor element. The effect above only fires when the page
+  // changes, but the editor also unmounts and remounts on the same page (opening and
+  // closing Trash, re-lock + unlock). A new element starts empty, so it showed a blank
+  // page and the next keystroke saved over the page's content. Paint on mount instead.
+  const curPageRef=useRef(null);curPageRef.current=curPage;
+  const attachEditor=useCallback(el=>{
+    edRef.current=el;
+    const pg=curPageRef.current;
+    if(el&&pg){el.innerHTML=sanitizeHTML(pg.content)||"<p><br></p>";prevPgRef.current=pg.id;updStats()}
+    else if(!el)prevPgRef.current=null;
+  },[updStats]);
   const updatePage=useCallback((pageId,updater)=>{
     const d=dataRef.current;if(!d)return;
     const nd={...d,notebooks:d.notebooks.map(nb=>({...nb,sections:(nb.sections||[]).map(sec=>{
@@ -1487,7 +1498,7 @@ function NoteForge(){
         <input className="nf-title-input" value={curPage.title} onChange={e=>updatePage(aPg,()=>({title:e.target.value,modified:Date.now()}))}/>
         <div className="nf-timestamps"><span>Created {new Date(curPage.created).toLocaleString()}</span><span>Modified {new Date(curPage.modified).toLocaleString()}</span></div>
       </div>
-      <div ref={edRef} className="nf-editor" contentEditable suppressContentEditableWarning
+      <div ref={attachEditor} className="nf-editor" contentEditable suppressContentEditableWarning
         onInput={onInput} onPaste={onPaste} onKeyDown={onKeyDown}
         onContextMenu={e=>{e.preventDefault();setEdCtx({x:e.clientX,y:e.clientY});setCtx(null)}}
         style={{fontSize:`${14*zoom/100}px`,whiteSpace:wrap?"pre-wrap":"pre",overflowX:wrap?"hidden":"auto",wordWrap:wrap?"break-word":"normal"}}/>

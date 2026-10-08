@@ -285,6 +285,24 @@ SCENARIOS.lockedNotebookWarnings = {
   },
 };
 
+SCENARIOS.trashToggleKeepsPage = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    const trash = `[...document.querySelectorAll(".nf-add-btn")].find(e=>e.textContent.startsWith("Trash"))`;
+    await c.js(`${trash}.click()`);
+    await c.sleep(300);
+    await c.js(`${trash}.click()`);
+    await c.sleep(300);
+    c.check("page content shown after closing Trash", (await c.js(R.editorText)).includes("alpha body"), JSON.stringify(await c.js(R.editorText)));
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const r=document.createRange();r.selectNodeContents(ed);r.collapse(false);
+      const s=getSelection();s.removeAllRanges();s.addRange(r);document.execCommand("insertText",false," typed")})()`);
+    await c.sleep(1000);
+    const saved = c.readData().notebooks[0].sections[0].pages[0].content;
+    c.check("typing afterwards keeps the existing content", saved.includes("alpha body") && saved.includes("typed"), saved);
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

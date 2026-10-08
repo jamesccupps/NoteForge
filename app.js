@@ -1651,6 +1651,21 @@ function NoteForge() {
       });
     }, 120);
   }, []);
+  // Callback ref for the editor element. The effect above only fires when the page
+  // changes, but the editor also unmounts and remounts on the same page (opening and
+  // closing Trash, re-lock + unlock). A new element starts empty, so it showed a blank
+  // page and the next keystroke saved over the page's content. Paint on mount instead.
+  const curPageRef = useRef(null);
+  curPageRef.current = curPage;
+  const attachEditor = useCallback(el => {
+    edRef.current = el;
+    const pg = curPageRef.current;
+    if (el && pg) {
+      el.innerHTML = sanitizeHTML(pg.content) || "<p><br></p>";
+      prevPgRef.current = pg.id;
+      updStats();
+    } else if (!el) prevPgRef.current = null;
+  }, [updStats]);
   const updatePage = useCallback((pageId, updater) => {
     const d = dataRef.current;
     if (!d) return;
@@ -3414,7 +3429,7 @@ function NoteForge() {
   }), /*#__PURE__*/React.createElement("div", {
     className: "nf-timestamps"
   }, /*#__PURE__*/React.createElement("span", null, "Created ", new Date(curPage.created).toLocaleString()), /*#__PURE__*/React.createElement("span", null, "Modified ", new Date(curPage.modified).toLocaleString()))), /*#__PURE__*/React.createElement("div", {
-    ref: edRef,
+    ref: attachEditor,
     className: "nf-editor",
     contentEditable: true,
     suppressContentEditableWarning: true,
