@@ -1201,12 +1201,21 @@ function PasswordDialog({
       fontSize: 14
     }
   }, met ? "✓" : "○"), text);
+
+  // Key events are stopped here, so Escape (= Cancel, where there is one) is handled locally
+  const onKey = e => {
+    stop(e);
+    if (e.key === "Escape" && onCancel) {
+      e.preventDefault();
+      onCancel();
+    }
+  };
   return /*#__PURE__*/React.createElement("div", {
     className: "nf-overlay",
     style: dark ? THEMES.dark : THEMES.light,
     onClick: stop,
     onMouseDown: stop,
-    onKeyDown: stop,
+    onKeyDown: onKey,
     onKeyUp: stop,
     onKeyPress: stop
   }, /*#__PURE__*/React.createElement("div", {
@@ -1950,6 +1959,13 @@ function NoteForge() {
       if (e.key === "F1") {
         e.preventDefault();
         setShowShortcuts(true);
+      }
+      // Escape closes context menus and the Settings panel (functional updates: this
+      // listener only re-subscribes on aPg/encEnabled/lockApp changes)
+      if (e.key === "Escape") {
+        setCtx(null);
+        setEdCtx(null);
+        setPwDialog(p => p?.type === "enc-settings" ? null : p);
       }
     };
     window.addEventListener("keydown", h);
@@ -3099,6 +3115,12 @@ function NoteForge() {
     placeholder: "Search all notes\u2026",
     value: gSearch,
     onChange: e => setGSearch(e.target.value),
+    onKeyDown: e => {
+      if (e.key === "Escape") {
+        setGSearch("");
+        e.currentTarget.blur();
+      }
+    },
     onFocus: () => setGFocused(true),
     onBlur: () => setTimeout(() => setGFocused(false), 250),
     style: {

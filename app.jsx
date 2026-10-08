@@ -442,7 +442,9 @@ function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,error,sho
     <span style={{fontSize:14}}>{met?"✓":"○"}</span>{text}
   </div>;
 
-  return <div className="nf-overlay" style={dark?THEMES.dark:THEMES.light} onClick={stop} onMouseDown={stop} onKeyDown={stop} onKeyUp={stop} onKeyPress={stop}>
+  // Key events are stopped here, so Escape (= Cancel, where there is one) is handled locally
+  const onKey=e=>{stop(e);if(e.key==="Escape"&&onCancel){e.preventDefault();onCancel()}};
+  return <div className="nf-overlay" style={dark?THEMES.dark:THEMES.light} onClick={stop} onMouseDown={stop} onKeyDown={onKey} onKeyUp={stop} onKeyPress={stop}>
     <div className="nf-overlay-card">
       <div style={{marginBottom:16}}><I n="shield" s={32}/></div>
       <div className="nf-overlay-title">{title}</div>
@@ -925,6 +927,9 @@ function NoteForge(){
       if(mod&&e.key==="d"&&!e.shiftKey){e.preventDefault();if(aPg)duplicatePage(aPg)}
       if(mod&&e.key==="l"){e.preventDefault();if(encEnabled)lockApp()}
       if(e.key==="F1"){e.preventDefault();setShowShortcuts(true)}
+      // Escape closes context menus and the Settings panel (functional updates: this
+      // listener only re-subscribes on aPg/encEnabled/lockApp changes)
+      if(e.key==="Escape"){setCtx(null);setEdCtx(null);setPwDialog(p=>p?.type==="enc-settings"?null:p)}
     };
     window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
   },[aPg,encEnabled,lockApp]);
@@ -1498,6 +1503,7 @@ function NoteForge(){
     <div style={{flex:1,maxWidth:360,position:"relative",marginLeft:12}}>
       <div style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"var(--text-muted)",pointerEvents:"none"}}><I n="search" s={13}/></div>
       <input placeholder="Search all notes…" value={gSearch} onChange={e=>setGSearch(e.target.value)}
+        onKeyDown={e=>{if(e.key==="Escape"){setGSearch("");e.currentTarget.blur()}}}
         onFocus={()=>setGFocused(true)} onBlur={()=>setTimeout(()=>setGFocused(false),250)}
         style={{width:"100%",height:30,paddingLeft:30,paddingRight:10,border:"1px solid var(--border)",borderRadius:8,background:"var(--bg)",color:"var(--text)",fontSize:12.5,outline:"none"}}/>
       {gResults.length>0&&gFocused&&<div className="nf-gsearch-dropdown fade-in">

@@ -767,6 +767,37 @@ SCENARIOS.toolbarSelectsFit = {
   },
 };
 
+SCENARIOS.escapeCloses = {
+  seed: seedBase,
+  async run(c) {
+    const esc = async () => {
+      c.win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      c.win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await c.sleep(250);
+    };
+    const title = () => c.js(`document.querySelector(".nf-overlay-title")?.textContent||null`);
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    c.menu("encryption-settings");
+    await c.waitFor(`document.querySelector(".nf-overlay-title")`);
+    await c.js(`${R.button(".nf-overlay-btn", "Enable Encryption")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Enable Encryption"`);
+    await esc();
+    c.check("Escape in a password dialog = Cancel (back to Settings)", (await title()) === "Settings", await title());
+    await esc();
+    c.check("Escape closes Settings", (await title()) === null, await title());
+    await c.js(R.rightClick(`document.querySelector(".nf-pg")`, 400, 200)); await c.sleep(200);
+    await esc();
+    c.check("Escape closes the page context menu", !(await c.js(`!!document.querySelector(".nf-ctx")`)));
+    await c.js(R.rightClick(`document.querySelector(".nf-editor p")`, 700, 300)); await c.sleep(200);
+    await esc();
+    c.check("Escape closes the editor context menu", !(await c.js(`!!document.querySelector(".nf-ctx")`)));
+    const box = `document.querySelector('input[placeholder="Search all notes…"]')`;
+    await c.js(`${box}.focus()`); await c.js(R.type(box, "alpha")); await c.sleep(300);
+    await esc();
+    c.check("Escape clears the search box", (await c.js(`${box}.value`)) === "" && !(await c.js(`!!document.querySelector(".nf-gsearch-dropdown")`)));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"
