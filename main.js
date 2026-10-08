@@ -154,6 +154,17 @@ function sanitizeDataJson(jsonStr) {
   } catch { return jsonStr; }
 }
 
+// Main-process second layer behind the renderer's sanitizeForDiskSync(), applied to
+// every save. Parses rather than substring-matching so an escaped key like
+// "locked" can't slip past. Throws on non-JSON, so junk never replaces the vault.
+function stripLockedSections(value) {
+  const data = JSON.parse(value);
+  const leaking = Array.isArray(data?.notebooks) && data.notebooks.some(nb => nb?.locked && nb.sections?.length);
+  if (!leaking) return value;
+  console.warn("[NoteForge] save contained plaintext sections for a locked notebook; stripped");
+  return sanitizeDataJson(value);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    PASSWORD STRENGTH — expanded list (~200 common passwords)
    ═══════════════════════════════════════════════════════════════ */
@@ -336,6 +347,7 @@ ipcMain.handle("storage-get", async () => {
 // .enc file whenever a save landed after lock or restore.
 function writeAppData(value) {
   if (typeof value !== "string") return false;
+  value = stripLockedSections(value);
   if (sessionKey) {
     writeFileAtomic(encFile, encryptWithSession(value));
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
