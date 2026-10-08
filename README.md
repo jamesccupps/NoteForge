@@ -10,7 +10,7 @@
 - **Fully offline** — All fonts, scripts, and dependencies bundled locally. The only network request is an optional update check against GitHub Releases on launch
 - **Rich text editor** — Bold, italic, headings, lists, tables, code blocks, links, images, checklists
 - **Image auto-downscale** — Pasted photos are automatically resized to 1600px and JPEG-compressed
-- **Find & Replace** — Safe text-node walking that won't break HTML
+- **Find & Replace** — Highlights every match with a live count; Enter / Shift+Enter step through them; replace one or all
 - **Auto-lock** — Configurable idle timeout (5/15/30/60 min) + Ctrl+L manual lock + per-notebook "Re-lock Now"
 - **Encrypted backup** — Export/restore `.enc` backup files. Restore checks the backup password before touching anything and keeps a rollback copy of your current notes
 - **Crash-safe saves** — The data file is written to a temp file, flushed, and renamed into place, so a crash mid-save can't truncate it
@@ -28,7 +28,16 @@
 
 ## What's new
 
-Full history is in [CHANGELOG.md](CHANGELOG.md). In 2.8.0:
+Full history is in [CHANGELOG.md](CHANGELOG.md).
+
+**2.8.1 (editor and UI pass):**
+- **Now works:** checklist ticks are saved, Find & Replace works, and printing gives just the note.
+- **Editing:** font sizes match their labels, and Tab / Shift+Tab indent lists and move between table cells.
+- **Code blocks, quotes and checklists:** Enter can leave code blocks and quotes, and checklists continue with Enter.
+- **Search and dark theme:** search finds `&` and `<`, and highlights are readable in the dark theme.
+- **Password and keyboard:** Change Password checks the current password first, and Escape closes dialogs and menus.
+
+**2.8.0 (audit release):**
 
 - **Data-loss fixes:**
   - "Remove Password" on a still-locked notebook no longer deletes its pages.

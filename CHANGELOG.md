@@ -5,8 +5,36 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+## [2.8.1] — 2026-10-08
+
+Editor and UI pass: every toolbar button, shortcut, menu and dialog was driven through the real app. Each fix has an end-to-end test that fails on 2.8.0.
+
 ### Fixed
-- Removed a startup read of `index.html` added in 2.8.0 as a workaround for an Electron asar-integrity gap. The gap doesn't exist: a separate investigation found Electron 44 does validate `index.html` loaded from the asar (tampered copies are rejected with or without the read). The 2.8.0 note below is corrected accordingly.
+- **Checklist ticks were never saved.** Ticking a box changed it on screen only, so it was lost on reload or when switching pages.
+- **Find & Replace did nothing.** Find never selected a match and Replace never replaced one (only Replace All worked). Rewritten:
+  - every match is highlighted, with the current one stronger;
+  - Enter / Shift+Enter step to the next / previous match;
+  - a live "2 of 5" / "No matches" count;
+  - Ctrl+F focuses the box with the selected text filled in;
+  - Escape closes it.
+- **Printing printed the whole app.** It captured the sidebar, toolbar and status bar in the current theme, and cut the note off at one screen. It now prints just the title and the full note, on white.
+- **Font sizes didn't match their labels.** "14px" gave 16px and "32px" gave 48px, and normal text showed as "12px". Each size now renders at its label and follows zoom.
+- **List buttons moved the caret to the start of the line.** Lists were also saved nested inside a paragraph, which added blank lines on reload.
+- **Tab in a bulleted or numbered list** now indents it, and Shift+Tab outdents it. Before, Tab moved focus out of the editor.
+- **Tab in a table** now moves between cells instead of leaving the editor. New tables start with empty cells (no leading space).
+- **You couldn't get out of a code block or quote.** Enter on an empty last line now continues below it.
+- **Checklists:**
+  - Enter adds a new to-do, and Enter on an empty one ends the list;
+  - clicking an item's text edits it instead of ticking it;
+  - inserting a checklist selects the placeholder.
+- **Search couldn't find text with `&` or `<`.** It also matched "amp" or "lt" in pages that contain neither.
+- **Highlighted text was unreadable in the dark theme.**
+- **Change Password accepted a wrong current password at step 1.** The error only appeared after you had typed the new password twice.
+- **Password dialogs said "Ready to encrypt" for passwords the app then rejects.**
+- **Escape** now closes Settings, password dialogs and right-click menus, and clears the search box.
+- **Ctrl+N in a new notebook with no sections** now creates a section and page instead of doing nothing.
+- **The heading dropdown cut "Normal" off at "Norn".**
+- **Removed a startup read of `index.html`** that 2.8.0 added as a workaround for an Electron asar-integrity gap. The gap doesn't exist: a separate investigation found Electron 44 does validate `index.html` loaded from the asar, with or without the read. The 2.8.0 note below is corrected accordingly.
 
 ## [2.8.0] — 2026-10-08
 
