@@ -745,6 +745,11 @@ function createWindow() {
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
 
   if (ws.maximized) mainWindow.maximize();
+  // With the embedded-asar-integrity fuse on (package.json build.electronFuses), Node-side
+  // reads from app.asar are hash-checked, but on Electron 44 the main-frame load of
+  // index.html was not: a tampered index.html (which carries the CSP) loaded fine.
+  // Reading it through fs first makes a tampered copy fail the check before it's shown.
+  if (app.isPackaged) fs.readFileSync(path.join(__dirname, "index.html"));
   mainWindow.loadFile("index.html");
   mainWindow.once("ready-to-show", () => mainWindow.show());
 
