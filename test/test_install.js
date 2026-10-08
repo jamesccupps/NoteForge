@@ -31,8 +31,8 @@ t("CSP blocks connect-src", /connect-src 'none'/.test(html));
 t("CSP has script-src 'self'", /script-src 'self'/.test(html));
 t("CSP has default-src 'none'", /default-src 'none'/.test(html));
 // Note: SRI hashes intentionally NOT used — they break Electron's file:// loader
-// (CORS fails silently with integrity+crossorigin on local files). The scripts'
-// integrity is guaranteed by the signed installer and electron-builder ASAR packing.
+// (CORS fails silently with integrity+crossorigin on local files). Packaged builds
+// rely on the embedded-asar-integrity fuse instead (see build.electronFuses).
 t("No SRI on local scripts (would break file:// loading)", !/lib\/react\.min\.js.*integrity=/.test(html));
 
 const preload = fs.readFileSync(path.join(root, "preload.js"), "utf-8");

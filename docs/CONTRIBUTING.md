@@ -7,19 +7,22 @@ Thanks for your interest. NoteForge is a small, single-maintainer project, but o
 ```bash
 git clone https://github.com/jamesccupps/NoteForge.git
 cd NoteForge
-npm install
+npm ci
 npm run build:jsx
 npm start
 ```
 
-Node.js 20 LTS or 22 LTS. Node 22 is recommended.
+Node.js 22 or 24 (LTS). CI tests both.
 
 ## The workflow
 
-1. Edit `app.jsx` (the React source). Do **not** edit `app.js` directly — it's generated.
+1. Edit `app.jsx` (the React source). Do **not** edit `app.js` directly — it's generated, but it is committed, so commit the rebuilt file with your change (CI fails if it is stale).
 2. Rebuild: `npm run build:jsx`.
-3. Run the app: `npm start`.
-4. Optional: build an installer with `npm run dist`.
+3. Test: `npm test` (unit) and `npm run test:e2e` (drives the real app against a throwaway profile; needs a desktop session).
+4. Run the app: `npm start`. This uses your real data folder.
+5. Optional: build an installer with `npm run dist`.
+
+Bug fixes should come with a test that fails without the fix. Main-process behaviour can be tested through `test/helpers/main_harness.js`, which loads the real `main.js` with a stubbed `electron`. Renderer behaviour goes in `test/e2e/app/scenarios.js`.
 
 ## Code style
 

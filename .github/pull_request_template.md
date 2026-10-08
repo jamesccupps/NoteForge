@@ -13,7 +13,9 @@ What does this change do and why?
 - [ ] Dependency update
 
 ## Checklist
-- [ ] `npm run build:jsx` succeeds
+- [ ] `npm run build:jsx` succeeds and the regenerated `app.js` is committed
+- [ ] `npm test` and `npm run test:e2e` pass
+- [ ] Bug fixes include a test that fails without the fix
 - [ ] `npm start` launches cleanly and the change works as described
 - [ ] If touching `main.js` crypto / IPC, I've confirmed no keys or plaintext can reach the renderer or disk in a form they shouldn't
 - [ ] If adding a runtime dependency, I've justified it in the PR description — no new CDN calls, no weakening of the "fully offline" story

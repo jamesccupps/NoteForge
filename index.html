@@ -8,8 +8,9 @@
   <link rel="stylesheet" href="styles.css">
   <!-- SRI is not used here because these scripts ship locally inside the app bundle.
        Electron's file:// loader enforces CORS when `crossorigin` is set, which blocks
-       local scripts silently. Integrity of bundled files is enforced by the signed
-       installer and electron-builder's ASAR integrity checks. -->
+       local scripts silently. In packaged builds the embedded-asar-integrity fuse
+       (package.json build.electronFuses) checks bundled files instead; the installer
+       itself is not code-signed. -->
   <script src="lib/react.min.js"></script>
   <script src="lib/react-dom.min.js"></script>
   <script src="lib/purify.min.js"></script>

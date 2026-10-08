@@ -10,8 +10,8 @@ echo.
 echo   RECOMMENDED: Push a git tag to build the
 echo   installer via GitHub Actions:
 echo.
-echo     git tag v2.6.1
-echo     git push origin v2.6.1
+echo     git tag vX.Y.Z   (matching package.json)
+echo     git push origin vX.Y.Z
 echo.
 echo   The installer will appear on the Releases
 echo   page automatically.
@@ -30,14 +30,16 @@ if %errorlevel% neq 0 (
 
 if not exist "node_modules" (
     echo Installing dependencies...
-    call npm install --no-audit --no-fund --loglevel=error
+    call npm ci --no-audit --no-fund --loglevel=error
     if %errorlevel% neq 0 (echo [ERROR] npm install failed. & pause & exit /b 1)
 )
 echo.
 
-echo Compiling JSX...
-call npx babel app.jsx --out-file app.js --presets=@babel/preset-react
+echo Compiling JSX and running tests...
+call npm run build:jsx
 if %errorlevel% neq 0 (echo [ERROR] JSX compile failed. & pause & exit /b 1)
+call npm test
+if %errorlevel% neq 0 (echo [ERROR] Tests failed. Not building. & pause & exit /b 1)
 echo.
 
 echo Building installer (requires Developer Mode or Admin)...
@@ -63,8 +65,8 @@ if %errorlevel% neq 0 (
     echo      Then run Build.bat again.
     echo.
     echo   2. Use GitHub Actions instead (recommended):
-    echo      git tag v2.6.1
-    echo      git push origin v2.6.1
+    echo      git tag vX.Y.Z
+    echo      git push origin vX.Y.Z
     echo ============================================
     pause
     exit /b 1

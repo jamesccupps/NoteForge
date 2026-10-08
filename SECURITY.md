@@ -27,6 +27,7 @@ Only the latest release (currently the 2.x line) receives security updates. Olde
 - Electron sandbox / context-isolation / preload-bridge escapes.
 - Renderer XSS or CSP bypass that affects encrypted-data confidentiality or integrity.
 - Auto-updater integrity (anything that could cause the app to install a version from an untrusted source).
+- Bypasses of the packaged app's Electron fuses or asar integrity validation (running modified app code from an installed copy).
 - Rate-limiter bypass for password attempts.
 - Config / backup file validation weaknesses.
 
@@ -46,8 +47,9 @@ Only the latest release (currently the 2.x line) receives security updates. Olde
 | Key derivation | scrypt (N=65536, r=8, p=1) |
 | Minimum accepted N on decrypt | 16384 (rejects weaker) |
 | Maximum accepted N on decrypt | 1048576 (rejects pathologically-large, DoS defense) |
+| Accepted r / p on decrypt | r 8–32, p 1–16, integers only (written as r=8, p=1) |
 | Key length | 32 bytes |
-| IV / nonce | 12 bytes, random per encryption |
+| IV / nonce | 16 bytes, random per encryption (GCM derives J0 from a non-96-bit IV via GHASH) |
 | Auth tag | 16 bytes, GCM-native |
 | Backup file version | `v=2` (v1 legacy format not accepted) |
 
