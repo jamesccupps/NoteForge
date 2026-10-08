@@ -15,6 +15,11 @@ t("has electron-builder config", !!pkg.build);
 const electronMajor = parseInt(pkg.devDependencies.electron.replace(/^[^\d]*/, ""), 10);
 t(`electron major >= 44 (got ${electronMajor})`, electronMajor >= 44);
 
+// lib/purify.min.js is what ships; the dompurify devDependency is only its source
+// (npm run vendor:dompurify). Keep them on the same exact version.
+const bundled = (fs.readFileSync(path.join(root, "lib", "purify.min.js"), "utf-8").match(/DOMPurify (\d+\.\d+\.\d+)/) || [])[1];
+t(`dompurify devDependency pinned to the bundled version (${bundled})`, pkg.devDependencies.dompurify === bundled, pkg.devDependencies.dompurify);
+
 for (const f of ["main.js", "preload.js", "app.js"]) {
   try { new vm.Script(fs.readFileSync(path.join(root, f), "utf-8")); t(`${f} syntactically valid`, true); }
   catch (e) { t(`${f} syntactically valid`, false, e.message); }

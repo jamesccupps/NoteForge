@@ -21,6 +21,7 @@
     "test:xss": "node test/test_xss.js && node test/test_input_hook.js",
     "test:install": "node test/test_install.js",
     "test:e2e": "node test/e2e/run.js",
+    "vendor:dompurify": "node -e \"require('fs').copyFileSync(require.resolve('dompurify/dist/purify.min.js'), 'lib/purify.min.js')\"",
     "predist": "npm run build:jsx && npm test",
     "dist": "electron-builder --win"
   },
@@ -75,7 +76,7 @@
   "devDependencies": {
     "@babel/cli": "^7.28.6",
     "@babel/preset-react": "^7.28.5",
-    "dompurify": "^3.2.0",
+    "dompurify": "3.4.16",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
     "jsdom": "^25.0.0"
