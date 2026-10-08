@@ -32,7 +32,7 @@ const R = {
   rightClick: (el, x = 60, y = 120) => `${el}.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,clientX:${x},clientY:${y}}))`,
   // Set a React-controlled input's value so onChange fires
   type: (el, value) => `(()=>{const i=${el};Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(i,${JSON.stringify(value)});i.dispatchEvent(new Event("input",{bubbles:true}))})()`,
-  editorText: `document.querySelector(".nf-editor")?.innerText||""`,
+  editorText: `(document.querySelector(".nf-editor")?.innerText||"")`,
 };
 
 async function unlockNotebook(c, name) {
