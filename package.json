@@ -19,6 +19,7 @@
     "test:crypto": "node test/test_crypto.js",
     "test:xss": "node test/test_xss.js && node test/test_input_hook.js",
     "test:install": "node test/test_install.js",
+    "test:e2e": "node test/e2e/run.js",
     "predist": "npm run build:jsx && npm test",
     "dist": "electron-builder --win"
   },

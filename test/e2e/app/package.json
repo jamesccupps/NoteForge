@@ -1,0 +1,6 @@
+{
+  "name": "noteforge-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "main": "harness.js"
+}
