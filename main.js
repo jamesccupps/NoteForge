@@ -799,9 +799,13 @@ function saveConfig(cfg) {
 }
 
 ipcMain.handle("get-config", async () => loadConfig());
+// Only settings the UI exposes. `sandbox` is deliberately absent: a compromised
+// renderer must not be able to turn its own sandbox off for the next launch. The
+// README documents editing noteforge-config.json by hand for that.
+const CONFIG_VALIDATORS = { autoUpdate: (v) => typeof v === "boolean" };
 ipcMain.handle("set-config", async (_e, key, value) => {
-  const ALLOWED = new Set(["autoUpdate", "sandbox"]);
-  if (!ALLOWED.has(key)) return { error: "Unknown config key" };
+  if (!Object.hasOwn(CONFIG_VALIDATORS, key)) return { error: "Unknown config key" };
+  if (!CONFIG_VALIDATORS[key](value)) return { error: "Invalid value" };
   const cfg = loadConfig();
   cfg[key] = value;
   saveConfig(cfg);

@@ -72,6 +72,22 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
     h.cleanup();
   }
 
+  section("Config written from the renderer");
+  {
+    const h = loadMain();
+    t("autoUpdate=false accepted", (await h.invoke("set-config", "autoUpdate", false)).autoUpdate === false);
+    t("persisted and read back", (await h.restart().invoke("get-config")).autoUpdate === false);
+    t("renderer can't disable the sandbox", !!(await h.invoke("set-config", "sandbox", false)).error);
+    t("non-boolean autoUpdate refused", !!(await h.invoke("set-config", "autoUpdate", "yes")).error);
+    t("prototype keys refused", !!(await h.invoke("set-config", "__proto__", { polluted: true })).error &&
+      !!(await h.invoke("set-config", "constructor", true)).error);
+    const cfg = JSON.parse(h.read("noteforge-config.json"));
+    t("config file only holds autoUpdate", JSON.stringify(cfg) === '{"autoUpdate":false}', JSON.stringify(cfg));
+    h.write("noteforge-config.json", '{"autoUpdate":true,"sandbox":false}');
+    t("hand-edited sandbox:false still honoured by loadConfig", (await h.restart().invoke("get-config")).sandbox === false);
+    h.cleanup();
+  }
+
   section("Atomic writes (temp file + fsync + rename)");
   {
     const fs = require("fs");
