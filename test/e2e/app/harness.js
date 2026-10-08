@@ -33,7 +33,11 @@ dialog.showMessageBox = async (...args) => {
   out.dialogs.push(o.title || o.message);
   return { response: scenario.messageBoxResponse ?? (o.cancelId ?? 1) };
 };
-dialog.showSaveDialog = async () => ({ canceled: true });
+dialog.showSaveDialog = async (...args) => {
+  const o = args.length > 1 ? args[1] : args[0];
+  out.dialogs.push("save:" + o.defaultPath);
+  return { canceled: true };
+};
 dialog.showOpenDialog = async () => (scenario.openDialog ? scenario.openDialog(tmp) : { canceled: true, filePaths: [] });
 
 // main.js calls loadFile("index.html") relative to the app path, which is this folder.

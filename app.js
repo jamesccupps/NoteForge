@@ -1774,6 +1774,10 @@ function NoteForge() {
   }, [aPg, encEnabled, lockApp]);
 
   /* ── Electron menu ───────────────────────────────────────── */
+  // The listener below only re-subscribes when encEnabled/lockApp change, so it must
+  // reach per-render handlers (which close over curPage, aNb, ...) through this ref.
+  // Calling them directly ran the copy from subscribe time: File > Export did nothing.
+  const menuActions = useRef({});
   useEffect(() => {
     if (!window.electronAPI) return;
     const cleanup = window.electronAPI.onMenuAction(a => {
@@ -1784,8 +1788,8 @@ function NoteForge() {
       if (a === "zoom-out") setZoom(z => Math.max(50, z - 10));
       if (a === "zoom-reset") setZoom(100);
       if (a === "toggle-wrap") setWrap(p => !p);
-      if (a === "export-html") doExportHTML();
-      if (a === "export-text") doExportText();
+      if (a === "export-html") menuActions.current.doExportHTML();
+      if (a === "export-text") menuActions.current.doExportText();
       if (a === "print") {
         const nb = dataRef.current?.notebooks?.find(n => n.id === aNbRef.current);
         const isLocked = nb?.locked || false;
@@ -1815,16 +1819,16 @@ function NoteForge() {
       if (a === "lock-app") {
         if (encEnabled) lockApp();
       }
-      if (a === "empty-trash") emptyTrash();
+      if (a === "empty-trash") menuActions.current.emptyTrash();
       if (a === "show-shortcuts") setShowShortcuts(true);
-      if (a === "new-notebook") addNotebook();
+      if (a === "new-notebook") menuActions.current.addNotebook();
       if (a === "new-page") {
         const d = dataRef.current;
         if (!d) return;
         const nb = d.notebooks.find(n => n.id === aNbRef.current);
         if (nb && nb.sections?.length) {
           const sid = aSecRef.current && (nb.sections || []).find(s => s.id === aSecRef.current) ? aSecRef.current : nb.sections[0].id;
-          addPage(nb.id, sid);
+          menuActions.current.addPage(nb.id, sid);
         }
       }
     });
@@ -2390,6 +2394,13 @@ function NoteForge() {
       a.click();
       URL.revokeObjectURL(a.href);
     }
+  };
+  menuActions.current = {
+    doExportHTML,
+    doExportText,
+    emptyTrash,
+    addNotebook,
+    addPage
   };
   const findItem = id => {
     if (!data) return null;

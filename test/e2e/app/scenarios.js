@@ -205,4 +205,27 @@ SCENARIOS.uncImagesBlocked = {
   },
 };
 
+SCENARIOS.menuExport = {
+  messageBoxResponse: 0, // "Export Anyway", so the save dialog (with its filename) opens
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages.push({ ...page("pg-b", "Page B", "<p>bravo body</p>"), modified: 0 });
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    await c.js(`[...document.querySelectorAll(".nf-pg")].find(e=>e.textContent.includes("Page B")).click()`);
+    await c.waitFor(`${R.editorText}.includes("bravo body")`);
+    c.menu("export-html");
+    await c.sleep(800);
+    c.check("File > Export as HTML exports the current page", c.dialogs.includes("save:Page_B.html"), c.dialogs.join(", "));
+    c.menu("export-text");
+    await c.sleep(800);
+    c.check("File > Export as Text exports the current page", c.dialogs.includes("save:Page_B.txt"), c.dialogs.join(", "));
+    c.menu("new-notebook");
+    await c.sleep(800);
+    c.check("File > New Notebook still works", c.readData().notebooks.length === 2);
+  },
+};
+
 module.exports = { SCENARIOS, R, NB_PW, seedBase, seedLocked, unlockNotebook };
