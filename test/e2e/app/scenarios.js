@@ -62,9 +62,9 @@ const SCENARIOS = {
       await c.waitFor(`document.querySelector(".nf-editor")`);
       await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML="<p>edited body</p>";ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
       await c.sleep(1000);
-      const pg = c.readData().notebooks[0].sections[0].pages[0];
-      c.check("edit saved to disk after debounce", pg.content === "<p>edited body</p>", pg.content);
-      c.check("schema version stamped", c.readData().version === 1);
+      const d = await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content === "<p>edited body</p>");
+      c.check("edit saved to disk after debounce", d.notebooks[0].sections[0].pages[0].content === "<p>edited body</p>", d.notebooks[0].sections[0].pages[0].content);
+      c.check("schema version stamped", d.version === 1);
     },
   },
 
@@ -132,12 +132,12 @@ SCENARIOS.removePassword = {
     await openRemove();
     await c.js(`${R.button(".nf-modal-btn", "Cancel")}.click()`);
     await c.sleep(800);
-    let nb = c.readData().notebooks.find((n) => n.id === "nb-l");
+    let nb = (await c.waitForData(() => true)).notebooks.find((n) => n.id === "nb-l");
     c.check("cancel keeps the notebook locked", nb.locked === true && !!nb.encSections);
     await openRemove();
     await c.js(`${R.button(".nf-modal-btn", "Remove Password")}.click()`);
     await c.sleep(1000);
-    nb = c.readData().notebooks.find((n) => n.id === "nb-l");
+    nb = (await c.waitForData((d) => d.notebooks.find((n) => n.id === "nb-l").locked === false)).notebooks.find((n) => n.id === "nb-l");
     c.check("confirm removes the lock", nb.locked === false && !nb.encSections);
     c.check("pages survive removing the lock", JSON.stringify(nb.sections).includes("TOPSECRET"));
   },
@@ -158,7 +158,8 @@ SCENARIOS.saveFailureShown = {
     await edit("saved now");
     await c.sleep(1000);
     c.check("next successful write shows 'Saved'", (await status()) === "Saved", await status());
-    c.check("content on disk after recovery", c.readData().notebooks[0].sections[0].pages[0].content === "<p>saved now</p>");
+    c.check("content on disk after recovery", (await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content === "<p>saved now</p>"))
+      .notebooks[0].sections[0].pages[0].content === "<p>saved now</p>");
   },
 };
 
@@ -225,7 +226,8 @@ SCENARIOS.menuExport = {
     c.check("File > Export as Text exports the current page", c.dialogs.includes("save:Page_B.txt"), c.dialogs.join(", "));
     c.menu("new-notebook");
     await c.sleep(800);
-    c.check("File > New Notebook still works", c.readData().notebooks.length === 2);
+    const afterNew = await c.waitForData((d) => d.notebooks.length === 2);
+    c.check("File > New Notebook still works", afterNew.notebooks.length === 2, JSON.stringify(afterNew.notebooks.map((n) => n.name)));
   },
 };
 
@@ -247,7 +249,7 @@ SCENARIOS.contextMenuPaste = {
       await c.sleep(1000);
       const text = await c.js(R.editorText);
       c.check("context-menu Paste inserts clipboard text at the caret", /alpha body\s*PASTED-FROM-CLIPBOARD/.test(text), JSON.stringify(text));
-      c.check("pasted text saved", JSON.stringify(c.readData()).includes("PASTED-FROM-CLIPBOARD"));
+      c.check("pasted text saved", JSON.stringify(await c.waitForData((d) => JSON.stringify(d).includes("PASTED-FROM-CLIPBOARD"))).includes("PASTED-FROM-CLIPBOARD"));
     } finally {
       await clipboard.writeText(saved);
     }
@@ -267,7 +269,8 @@ SCENARIOS.replaceAll = {
     await c.sleep(800);
     const text = await c.js(R.editorText);
     c.check("Replace All inserts the replacement literally", text === "cost 5 US$& ($1) $$, US$& ($1) $$", JSON.stringify(text));
-    c.check("replacement saved", c.readData().notebooks[0].sections[0].pages[0].content.includes("US$&amp; ($1) $$"));
+    const replaced = (await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes("US$&amp;"))).notebooks[0].sections[0].pages[0].content;
+    c.check("replacement saved", replaced.includes("US$&amp; ($1) $$"), replaced);
   },
 };
 
@@ -300,7 +303,7 @@ SCENARIOS.trashToggleKeepsPage = {
     await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const r=document.createRange();r.selectNodeContents(ed);r.collapse(false);
       const s=getSelection();s.removeAllRanges();s.addRange(r);document.execCommand("insertText",false," typed")})()`);
     await c.sleep(1000);
-    const saved = c.readData().notebooks[0].sections[0].pages[0].content;
+    const saved = (await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes("typed"))).notebooks[0].sections[0].pages[0].content;
     c.check("typing afterwards keeps the existing content", saved.includes("alpha body") && saved.includes("typed"), saved);
   },
 };
@@ -355,8 +358,9 @@ SCENARIOS.listTabIndent = {
     await press();
     c.check("Tab in a numbered list nests it", await nested("second"), await c.js(`document.querySelector(".nf-editor").innerHTML`));
     await c.sleep(800);
-    c.check("nested list saved", /<ol>\s*<li>first<\/li>\s*<ol>|<li>first<ol>/.test(c.readData().notebooks[0].sections[0].pages[0].content),
-      c.readData().notebooks[0].sections[0].pages[0].content);
+    const nestedRe = /<ol>\s*<li>first<\/li>\s*<ol>|<li>first<ol>/;
+    const listHtml = (await c.waitForData((d) => nestedRe.test(d.notebooks[0].sections[0].pages[0].content))).notebooks[0].sections[0].pages[0].content;
+    c.check("nested list saved", nestedRe.test(listHtml), listHtml);
   },
 };
 

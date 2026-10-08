@@ -70,6 +70,19 @@ function makeCtx(win) {
     menu: (action) => win.webContents.send("menu-action", action),
     file: (name) => path.join(tmp, name),
     readData: () => JSON.parse(fs.readFileSync(path.join(tmp, "noteforge-data.json"), "utf-8")),
+    // Polls the saved file until pred(data) holds (or ms passes) and returns the last data
+    // read. Saves are debounced 500 ms and any further edit (e.g. a rename input committing
+    // on window blur) restarts the timer, so a fixed sleep before reading is racy.
+    async waitForData(pred, ms = 4000) {
+      const t0 = Date.now();
+      let data = null;
+      while (Date.now() - t0 < ms) {
+        try { data = JSON.parse(fs.readFileSync(path.join(tmp, "noteforge-data.json"), "utf-8")); if (pred(data)) return data; }
+        catch { /* mid-rename or not written yet */ }
+        await sleep(100);
+      }
+      return data;
+    },
   };
 }
 
