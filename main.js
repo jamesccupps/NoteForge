@@ -703,6 +703,9 @@ ipcMain.handle("print-with-warning", async (_e, isLocked) => {
 });
 
 ipcMain.handle("open-data-folder", async () => { shell.openPath(userDataPath); });
+// Editor context-menu Paste. A native paste is delivered to the page as a paste event,
+// so it takes the same sanitizing path as Ctrl+V (including images).
+ipcMain.handle("paste", async (e) => { e.sender.paste(); });
 
 /* ═══════════════════════════════════════════════════════════════
    WINDOW

@@ -3634,15 +3634,9 @@ function NoteForge() {
       }
     }, "Ctrl+C")), /*#__PURE__*/React.createElement("div", {
       className: "nf-ctx-item",
-      onClick: async () => {
-        try {
-          const t = await navigator.clipboard.readText();
-          if (t) {
-            edRef.current?.focus();
-            document.execCommand("insertText", false, t);
-            setTimeout(() => onInput(), 10);
-          }
-        } catch {}
+      onClick: () => {
+        edRef.current?.focus();
+        window.electronAPI?.paste?.();
         setEdCtx(null);
       }
     }, /*#__PURE__*/React.createElement(I, {

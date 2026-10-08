@@ -1546,7 +1546,9 @@ function NoteForge(){
     return <div className="nf-ctx fade-in" style={{left:mx,top:my}}>
       <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>{if(hasSel){document.execCommand("cut");setTimeout(()=>onInput(),10)}setEdCtx(null)}}><I n="scissors" s={13}/> Cut <span style={{marginLeft:"auto",fontSize:10,color:"var(--text-muted)"}}>Ctrl+X</span></div>
       <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>{if(hasSel)document.execCommand("copy");setEdCtx(null)}}><I n="copy" s={13}/> Copy <span style={{marginLeft:"auto",fontSize:10,color:"var(--text-muted)"}}>Ctrl+C</span></div>
-      <div className="nf-ctx-item" onClick={async()=>{try{const t=await navigator.clipboard.readText();if(t){edRef.current?.focus();document.execCommand("insertText",false,t);setTimeout(()=>onInput(),10)}}catch{}setEdCtx(null)}}><I n="clipboard" s={13}/> Paste <span style={{marginLeft:"auto",fontSize:10,color:"var(--text-muted)"}}>Ctrl+V</span></div>
+      {/* navigator.clipboard.readText() is refused by the deny-all permission handler, so
+          ask main to run a native paste; it arrives as a paste event and goes through onPaste. */}
+      <div className="nf-ctx-item" onClick={()=>{edRef.current?.focus();window.electronAPI?.paste?.();setEdCtx(null)}}><I n="clipboard" s={13}/> Paste <span style={{marginLeft:"auto",fontSize:10,color:"var(--text-muted)"}}>Ctrl+V</span></div>
       <div className="nf-ctx-item" onClick={()=>{document.execCommand("selectAll");setEdCtx(null)}}><I n="check" s={13}/> Select All</div>
       <div className="nf-ctx-sep"/>
       <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doCmd("bold")}><I n="bold" s={13}/> Bold</div>

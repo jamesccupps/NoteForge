@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   exportText: (title, text, isLocked) => ipcRenderer.invoke("export-text", title, text, !!isLocked),
   printWithWarning: (isLocked) => ipcRenderer.invoke("print-with-warning", isLocked),
   openDataFolder: () => ipcRenderer.invoke("open-data-folder"),
+  paste: () => ipcRenderer.invoke("paste"),
   // Menu
   onMenuAction: (cb) => {
     const handler = (_e, action) => cb(action);

@@ -228,6 +228,30 @@ SCENARIOS.menuExport = {
   },
 };
 
+SCENARIOS.contextMenuPaste = {
+  seed: seedBase,
+  async run(c) {
+    // Uses the real system clipboard; the text that was on it is put back afterwards.
+    const { clipboard } = require("electron");
+    const saved = clipboard.readText();
+    try {
+      clipboard.writeText("PASTED-FROM-CLIPBOARD");
+      await c.waitFor(`document.querySelector(".nf-editor")`);
+      await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const r=document.createRange();
+        r.selectNodeContents(ed);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r);
+        ed.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,clientX:400,clientY:300}))})()`);
+      await c.sleep(200);
+      await c.js(`${R.ctxItem("Paste")}.click()`);
+      await c.sleep(1000);
+      const text = await c.js(R.editorText);
+      c.check("context-menu Paste inserts clipboard text at the caret", /alpha body\s*PASTED-FROM-CLIPBOARD/.test(text), JSON.stringify(text));
+      c.check("pasted text saved", JSON.stringify(c.readData()).includes("PASTED-FROM-CLIPBOARD"));
+    } finally {
+      clipboard.writeText(saved);
+    }
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"
