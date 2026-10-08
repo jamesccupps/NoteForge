@@ -2773,6 +2773,7 @@ function NoteForge() {
   if (!data) return null;
   return /*#__PURE__*/React.createElement("div", {
     className: "nf-root",
+    "data-theme": dark ? "dark" : "light",
     style: tv
   }, pwDialog?.type === "enc-settings" && /*#__PURE__*/React.createElement("div", {
     className: "nf-overlay",

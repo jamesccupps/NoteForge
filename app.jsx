@@ -1375,7 +1375,7 @@ function NoteForge(){
   if(!data)return null;
 
   return (
-  <div className="nf-root" style={tv}>
+  <div className="nf-root" data-theme={dark?"dark":"light"} style={tv}>
 
   {/* ═══ PASSWORD DIALOGS ═════════════════════════════════════ */}
   {pwDialog?.type==="enc-settings"&&<div className="nf-overlay" style={tv} onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}>

@@ -707,6 +707,24 @@ SCENARIOS.checklistEditing = {
   },
 };
 
+SCENARIOS.highlightContrast = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content =
+      '<p><span style="background-color: rgb(254, 240, 138);">yellow</span> <span style="background-color: transparent;">cleared</span> plain</p>';
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor span")`);
+    const col = (i) => c.js(`getComputedStyle(document.querySelectorAll(".nf-editor span")[${i}]).color`);
+    const plain = () => c.js(`getComputedStyle(document.querySelector(".nf-editor p")).color`);
+    c.check("dark theme: highlighted text is dark", (await col(0)) === "rgb(26, 26, 26)", await col(0));
+    c.check("dark theme: 'no highlight' text stays light", (await col(1)) === (await plain()), `${await col(1)} vs ${await plain()}`);
+    c.menu("toggle-theme"); await c.sleep(300);
+    c.check("light theme unchanged", (await col(0)) === (await plain()), `${await col(0)} vs ${await plain()}`);
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

@@ -186,6 +186,9 @@ input,select,button{font-family:inherit}
 .nf-editor font[size="5"]{font-size:calc(var(--nf-fs,14px)*18/14)}
 .nf-editor font[size="6"]{font-size:calc(var(--nf-fs,14px)*24/14)}
 .nf-editor font[size="7"]{font-size:calc(var(--nf-fs,14px)*32/14)}
+/* Highlight colours are pastel backgrounds; in the dark theme the default near-white
+   text on them was unreadable. ("No highlight" writes a transparent background.) */
+.nf-root[data-theme="dark"] .nf-editor [style*="background-color"]:not([style*="transparent"]):not([style*="rgba(0, 0, 0, 0)"]){color:#1a1a1a}
 /* Find & Replace matches (CSS Custom Highlight API) */
 ::highlight(nf-find){background-color:rgba(250,204,21,.35)}
 ::highlight(nf-find-current){background-color:#f59e0b;color:#111}
