@@ -2308,7 +2308,8 @@ function NoteForge() {
     while (walker.nextNode()) nodes.push(walker.currentNode);
     for (const node of nodes) {
       const re = new RegExp(escaped, "gi");
-      if (re.test(node.textContent)) node.textContent = node.textContent.replace(new RegExp(escaped, "gi"), replT);
+      // Function replacement: a string would treat "$&", "$1", "$$" in replT as patterns
+      if (re.test(node.textContent)) node.textContent = node.textContent.replace(new RegExp(escaped, "gi"), () => replT);
     }
     onInput();
   };

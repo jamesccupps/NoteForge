@@ -252,6 +252,23 @@ SCENARIOS.contextMenuPaste = {
   },
 };
 
+SCENARIOS.replaceAll = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML="<p>cost 5 dollars, Dollars</p>";ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+    c.menu("find-replace");
+    await c.waitFor(`document.querySelectorAll(".nf-find-input").length===2`);
+    await c.js(R.type(`document.querySelectorAll(".nf-find-input")[0]`, "dollars"));
+    await c.js(R.type(`document.querySelectorAll(".nf-find-input")[1]`, "US$& ($1) $$"));
+    await c.js(`${R.button(".nf-find-btn", "All")}.click()`);
+    await c.sleep(800);
+    const text = await c.js(R.editorText);
+    c.check("Replace All inserts the replacement literally", text === "cost 5 US$& ($1) $$, US$& ($1) $$", JSON.stringify(text));
+    c.check("replacement saved", c.readData().notebooks[0].sections[0].pages[0].content.includes("US$&amp; ($1) $$"));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"
