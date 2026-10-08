@@ -2238,7 +2238,18 @@ function NoteForge() {
       };
     }
   };
-  const removeNotebookLock = nbId => {
+  const removeNotebookLock = async nbId => {
+    const nb = dataRef.current?.notebooks.find(n => n.id === nbId);
+    // Until the notebook is unlocked its pages exist only inside encSections, so
+    // clearing the blob here would destroy them.
+    if (!nb || !nb.locked || !unlockedNbs.has(nbId)) return;
+    const ok = await confirm({
+      title: `Remove password from "${nb.name}"?`,
+      message: encEnabled ? "Its pages will no longer need the notebook password. They stay encrypted under your master password." : "Its pages will no longer need a password and will be saved unencrypted on disk.",
+      confirmLabel: "Remove Password",
+      confirmStyle: "danger"
+    });
+    if (!ok) return;
     const d = dataRef.current;
     const nd = {
       ...d,
@@ -3532,7 +3543,7 @@ function NoteForge() {
     }, /*#__PURE__*/React.createElement(I, {
       n: "lock",
       s: 13
-    }), " Re-lock Now")), hasElectronCrypto() && found.item.locked && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    }), " Re-lock Now"), /*#__PURE__*/React.createElement("div", {
       className: "nf-ctx-item",
       onClick: () => {
         removeNotebookLock(ctx.id);

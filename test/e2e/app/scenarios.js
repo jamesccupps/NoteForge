@@ -108,4 +108,38 @@ const SCENARIOS = {
   },
 };
 
+SCENARIOS.removePassword = {
+  seed: seedLocked,
+  async run(c) {
+    await c.waitFor(R.nb("Locked"));
+    const before = require("fs").readFileSync(c.file("noteforge-data.json"), "utf-8");
+    await c.js(R.rightClick(R.nb("Locked")));
+    await c.sleep(200);
+    const items = await c.js(`[...document.querySelectorAll(".nf-ctx-item")].map(e=>e.textContent.trim())`);
+    c.check("still-locked notebook: no Remove Password item", !items.some((t) => t.includes("Remove Password")), items.join(", "));
+    await c.js(`document.body.click()`);
+    await c.sleep(800);
+    c.check("still-locked notebook: data file untouched", require("fs").readFileSync(c.file("noteforge-data.json"), "utf-8") === before);
+
+    await unlockNotebook(c, "Locked");
+    const openRemove = async () => {
+      await c.js(R.rightClick(R.nb("Locked")));
+      await c.sleep(200);
+      await c.js(`${R.ctxItem("Remove Password")}.click()`);
+      await c.waitFor(`document.querySelector(".nf-modal")`);
+    };
+    await openRemove();
+    await c.js(`${R.button(".nf-modal-btn", "Cancel")}.click()`);
+    await c.sleep(800);
+    let nb = c.readData().notebooks.find((n) => n.id === "nb-l");
+    c.check("cancel keeps the notebook locked", nb.locked === true && !!nb.encSections);
+    await openRemove();
+    await c.js(`${R.button(".nf-modal-btn", "Remove Password")}.click()`);
+    await c.sleep(1000);
+    nb = c.readData().notebooks.find((n) => n.id === "nb-l");
+    c.check("confirm removes the lock", nb.locked === false && !nb.encSections);
+    c.check("pages survive removing the lock", JSON.stringify(nb.sections).includes("TOPSECRET"));
+  },
+};
+
 module.exports = { SCENARIOS, R, NB_PW, seedBase, seedLocked, unlockNotebook };
