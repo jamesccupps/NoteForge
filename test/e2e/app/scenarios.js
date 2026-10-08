@@ -142,4 +142,23 @@ SCENARIOS.removePassword = {
   },
 };
 
+SCENARIOS.saveFailureShown = {
+  seed: seedBase,
+  async run(c) {
+    const fs = require("fs");
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const edit = (text) => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML="<p>${text}</p>";ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+    const status = () => c.js(`[...document.querySelectorAll(".nf-status span")].map(s=>s.textContent).find(t=>/Save/.test(t))`);
+    fs.chmodSync(c.file("noteforge-data.json"), 0o444); // read-only: the write will fail
+    await edit("cannot be saved");
+    await c.sleep(1000);
+    c.check("failed write shows 'Save failed'", (await status()) === "Save failed", await status());
+    fs.chmodSync(c.file("noteforge-data.json"), 0o644);
+    await edit("saved now");
+    await c.sleep(1000);
+    c.check("next successful write shows 'Saved'", (await status()) === "Saved", await status());
+    c.check("content on disk after recovery", c.readData().notebooks[0].sections[0].pages[0].content === "<p>saved now</p>");
+  },
+};
+
 module.exports = { SCENARIOS, R, NB_PW, seedBase, seedLocked, unlockNotebook };

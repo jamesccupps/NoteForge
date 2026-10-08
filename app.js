@@ -1309,6 +1309,7 @@ function NoteForge() {
     l: 0
   });
   const [saved, setSaved] = useState(true);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   // Encryption state
   const [appPhase, setAppPhase] = useState("loading"); // loading|needsPassword|ready
@@ -1562,8 +1563,9 @@ function NoteForge() {
         ...toSave,
         version: SCHEMA_VERSION
       };
-      await store.set(JSON.stringify(toSave));
+      const ok = await store.set(JSON.stringify(toSave));
       setSaved(true);
+      setSaveFailed(!ok);
     }, 500);
   }, []);
   useEffect(() => () => {
@@ -3446,17 +3448,18 @@ function NoteForge() {
     s: 10
   }), " Encrypted"), /*#__PURE__*/React.createElement("span", null, zoom, "%"), /*#__PURE__*/React.createElement("span", null, "Wrap ", wrap ? "on" : "off"), /*#__PURE__*/React.createElement("span", {
     style: {
-      color: saved ? "var(--success)" : "var(--warning)",
+      color: saveFailed ? "var(--danger)" : saved ? "var(--success)" : "var(--warning)",
       display: "flex",
       alignItems: "center",
       gap: 3
-    }
+    },
+    title: saveFailed ? "The last change could not be written to disk" : undefined
   }, /*#__PURE__*/React.createElement("span", {
     className: "nf-status-dot",
     style: {
       background: "currentColor"
     }
-  }), saved ? "Saved" : "Saving…")))), ctx && (() => {
+  }), saveFailed ? "Save failed" : saved ? "Saved" : "Saving…")))), ctx && (() => {
     const found = findItem(ctx.id);
     if (!found) return null;
     const mx = Math.min(ctx.x, window.innerWidth - 200);

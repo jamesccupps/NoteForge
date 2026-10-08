@@ -475,6 +475,7 @@ function NoteForge(){
   const [edCtx,setEdCtx]=useState(null);
   const [stats,setStats]=useState({w:0,c:0,l:0});
   const [saved,setSaved]=useState(true);
+  const [saveFailed,setSaveFailed]=useState(false);
 
   // Encryption state
   const [appPhase,setAppPhase]=useState("loading"); // loading|needsPassword|ready
@@ -665,7 +666,8 @@ function NoteForge(){
       toSave=sanitizeForDiskSync(toSave);
       // Stamp schema version so future releases can migrate safely
       toSave={...toSave,version:SCHEMA_VERSION};
-      await store.set(JSON.stringify(toSave));setSaved(true);
+      const ok=await store.set(JSON.stringify(toSave));
+      setSaved(true);setSaveFailed(!ok);
     },500);
   },[]);
   useEffect(()=>()=>{if(saveTimer.current)clearTimeout(saveTimer.current)},[]);
@@ -1486,8 +1488,9 @@ function NoteForge(){
       <div style={{flex:1}}/>
       {encEnabled&&<span className="nf-enc-badge"><I n="lock" s={10}/> Encrypted</span>}
       <span>{zoom}%</span><span>Wrap {wrap?"on":"off"}</span>
-      <span style={{color:saved?"var(--success)":"var(--warning)",display:"flex",alignItems:"center",gap:3}}>
-        <span className="nf-status-dot" style={{background:"currentColor"}}/>{saved?"Saved":"Saving…"}
+      <span style={{color:saveFailed?"var(--danger)":saved?"var(--success)":"var(--warning)",display:"flex",alignItems:"center",gap:3}}
+        title={saveFailed?"The last change could not be written to disk":undefined}>
+        <span className="nf-status-dot" style={{background:"currentColor"}}/>{saveFailed?"Save failed":saved?"Saved":"Saving…"}
       </span>
     </div>}
   </div>
