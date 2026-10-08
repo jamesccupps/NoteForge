@@ -2180,7 +2180,8 @@ function NoteForge() {
       s.delete(nbId);
       return s;
     });
-    if (aNb === nbId && !nb.sections?.length) {
+    // Its sections are gone from memory now, so drop a selection that pointed into them
+    if (aNb === nbId) {
       setASec(null);
       setAPg(null);
     }

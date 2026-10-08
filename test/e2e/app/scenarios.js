@@ -303,6 +303,25 @@ SCENARIOS.trashToggleKeepsPage = {
   },
 };
 
+SCENARIOS.relockActiveNotebook = {
+  seed: seedLocked,
+  async run(c) {
+    await c.waitFor(R.nb("Locked"));
+    await unlockNotebook(c, "Locked");
+    await c.js(R.rightClick(R.nb("Locked")));
+    await c.sleep(200);
+    await c.js(`${R.ctxItem("Re-lock Now")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-modal")`);
+    await c.js(`${R.button(".nf-modal-btn", "Re-lock")}.click()`);
+    await c.sleep(800);
+    c.check("page list pane closes after re-locking the open notebook", !(await c.js(`!!document.querySelector(".nf-pages")`)));
+    c.check("editor shows the empty state", (await c.js(`document.querySelector(".nf-empty")?.innerText||""`)).includes("Select a section"));
+    c.check("re-locked content gone from the DOM", !(await c.js(`document.body.innerText.includes("TOPSECRET")||document.body.innerText.includes("Secret page")`)));
+    await unlockNotebook(c, "Locked");
+    c.check("notebook unlocks again and shows its page", (await c.js(R.editorText)).includes("TOPSECRET"));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

@@ -1002,7 +1002,8 @@ function NoteForge(){
     const nd={...d,notebooks:d.notebooks.map(n=>n.id!==nbId?n:{...n,sections:[]})};
     persist(nd);
     setUnlockedNbs(p=>{const s=new Set(p);s.delete(nbId);return s});
-    if(aNb===nbId&&!nb.sections?.length){setASec(null);setAPg(null)}
+    // Its sections are gone from memory now, so drop a selection that pointed into them
+    if(aNb===nbId){setASec(null);setAPg(null)}
   };
 
   /* ═══ Notebook Lock/Unlock ═════════════════════════════════ */
