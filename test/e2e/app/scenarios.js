@@ -560,6 +560,27 @@ SCENARIOS.listButtonUndo = {
   },
 };
 
+SCENARIOS.searchEntities = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages.push(page("pg-c", "Cartoons", "<p>Tom &amp; Jerry &lt;3</p>"));
+    return d;
+  },
+  async run(c) {
+    const box = `document.querySelector('input[placeholder="Search all notes…"]')`;
+    await c.waitFor(box);
+    await c.js(`${box}.focus()`);
+    const results = async (q) => {
+      await c.js(R.type(box, q));
+      await c.sleep(400);
+      return c.js(`[...document.querySelectorAll(".nf-gsearch-item")].map(e=>e.querySelector("div").textContent).join(",")`);
+    };
+    c.check('finds "Tom & Jerry"', (await results("Tom & Jerry")) === "Cartoons", await results("Tom & Jerry"));
+    c.check('finds "<3"', (await results("<3")) === "Cartoons", await results("<3"));
+    c.check('no false match on "amp"', (await results("amp")) === "", await results("amp"));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

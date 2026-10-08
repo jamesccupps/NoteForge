@@ -1207,7 +1207,9 @@ function NoteForge(){
       const q=gSearch.toLowerCase(),res=[];
       for(const nb of data.notebooks)for(const sec of nb.sections||[])for(const pg of sec.pages){
         if(pg.deleted)continue;
-        const text=(pg.title+" "+(pg.content||"").replace(/<[^>]*>/g," ")).toLowerCase();
+        // Decode entities: searching the stored HTML missed "&" / "<" (saved as &amp; / &lt;)
+        // and matched "amp" or "lt" in text that has neither.
+        const text=(pg.title+" "+decodeEntities((pg.content||"").replace(/<[^>]*>/g," "))).toLowerCase();
         if(text.includes(q))res.push({nbId:nb.id,secId:sec.id,page:pg,nbName:nb.name,secName:sec.name});
       }
       setGResults(res);
