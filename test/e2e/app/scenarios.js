@@ -725,6 +725,33 @@ SCENARIOS.highlightContrast = {
   },
 };
 
+SCENARIOS.changePasswordStep1 = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    await c.js(`window.electronAPI.enableEncryption("Master!Passw0rd-e2e","")`);
+    c.win.webContents.reload(); await c.sleep(500);
+    await c.waitFor(`document.querySelector(".nf-overlay-input")`);
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, "Master!Passw0rd-e2e"));
+    await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    c.menu("encryption-settings");
+    await c.waitFor(R.button(".nf-overlay-btn", "Change Password"));
+    await c.js(`${R.button(".nf-overlay-btn", "Change Password")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-overlay-input")`);
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, "not-my-password"));
+    await c.js(`${R.button(".nf-overlay-btn", "Next")}.click()`);
+    await c.sleep(600);
+    const title = () => c.js(`document.querySelector(".nf-overlay-title").textContent`);
+    c.check("wrong current password stops at step 1", (await title()).includes("Step 1"), await title());
+    c.check("…with an error", (await c.js(`document.querySelector(".nf-overlay-error")?.textContent||""`)) === "Wrong current password");
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, "Master!Passw0rd-e2e"));
+    await c.js(`${R.button(".nf-overlay-btn", "Next")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent.includes("Step 2")`);
+    c.check("right current password goes to step 2", true);
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

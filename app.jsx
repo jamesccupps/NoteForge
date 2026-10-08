@@ -1450,6 +1450,10 @@ function NoteForge(){
     onCancel={()=>{setPwDialog({type:"enc-settings"});setPwError("")}}
     onSubmit={async oldPw=>{
       setPwError("");
+      // Check it now; before, a wrong current password only surfaced after the new one
+      // had been typed twice, and left you stuck on step 2.
+      const r=await window.electronAPI.verifyMasterPassword(oldPw);
+      if(r.error){setPwError(r.error);return}
       setPwDialog({type:"change-pw-new",oldPw});
     }}/>}
 
@@ -1460,6 +1464,7 @@ function NoteForge(){
     onSubmit={async newPw=>{
       setPwError("");
       const r=await window.electronAPI.changeMasterPassword(pwDialog.oldPw,newPw);
+      if(r.error==="Wrong current password"){setPwDialog({type:"change-pw"});setPwError(r.error);return}
       if(r.error){setPwError(r.error);return}
       setPwDialog({type:"enc-settings"});
     }}/>}

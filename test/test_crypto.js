@@ -119,6 +119,19 @@ const DATA = JSON.stringify({ notebooks: [{ id: "nb1", name: "Test", sections: [
     h.cleanup();
   }
 
+  section("Verify current master password (Change Password step 1)");
+  {
+    const h = loadMain();
+    h.write("noteforge-data.json", DATA);
+    await h.invoke("enable-encryption", PW, "");
+    t("right password verifies", (await h.invoke("verify-master-password", PW)).success === true);
+    t("wrong password rejected", (await h.invoke("verify-master-password", "nope-nope-nope")).error === "Wrong current password");
+    t("vault unchanged by verifying", (await h.restart().invoke("unlock-master", PW)).value === DATA);
+    for (let i = 0; i < 5; i++) await h.invoke("verify-master-password", "wrong-" + i);
+    t("shares the unlock rate limit", /Too many failed attempts/.test((await h.invoke("verify-master-password", PW)).error || ""));
+    h.cleanup();
+  }
+
   section("Notebook encryption");
   {
     const h = loadMain();

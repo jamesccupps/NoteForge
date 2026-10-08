@@ -465,6 +465,19 @@ ipcMain.handle("change-master-password", async (_e, oldPassword, newPassword) =>
 });
 
 ipcMain.handle("check-password-strength", async (_e, pw) => ({ error: checkPasswordStrength(pw) }));
+
+// Change Password step 1: reject a wrong current password before the user types a new
+// one twice. Same rate limit and failure counting as unlock.
+ipcMain.handle("verify-master-password", async (_e, password) => {
+  const rlErr = checkMasterRateLimit();
+  if (rlErr) return { error: rlErr };
+  try {
+    if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
+    decryptData(fs.readFileSync(encFile, "utf-8"), password).key.fill(0);
+    recordMasterSuccess();
+    return { success: true };
+  } catch (e) { recordMasterFailure(); return { error: "Wrong current password" }; }
+});
 ipcMain.handle("lock-app", async () => { lockSession(); return { success: true }; });
 
 /* ═══════════════════════════════════════════════════════════════

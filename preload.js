@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   enableEncryption: (pw, hint) => ipcRenderer.invoke("enable-encryption", pw, hint),
   disableEncryption: (pw) => ipcRenderer.invoke("disable-encryption", pw),
   changeMasterPassword: (oldPw, newPw) => ipcRenderer.invoke("change-master-password", oldPw, newPw),
+  verifyMasterPassword: (pw) => ipcRenderer.invoke("verify-master-password", pw),
   checkPasswordStrength: (pw) => ipcRenderer.invoke("check-password-strength", pw),
   lockApp: () => ipcRenderer.invoke("lock-app"),
   setHint: (hint) => ipcRenderer.invoke("set-hint", hint),
