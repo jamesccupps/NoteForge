@@ -250,12 +250,19 @@ SCENARIOS.restoreBackup = {
     c.check("wrong backup password shows an error", true);
     await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
     await c.js(`${R.button(".nf-overlay-btn", "Restore Backup")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-modal h3")?.textContent==="Restore complete"`);
+    const msg = await c.js(`document.querySelector(".nf-modal p").textContent`);
+    c.check("'Restore complete' alert names the rollback file", msg.includes("noteforge-data.json.pre-restore.bak"), msg);
+    await c.js(`${R.button(".nf-modal-btn", "OK")}.click()`);
     await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Unlock NoteForge"`);
     c.check("restore leads to the unlock screen", true);
     await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
     await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
     await c.waitFor(`${R.editorText}.includes("from the backup")`);
     c.check("restored notes open with the backup password", true);
+    const fs = require("fs");
+    c.check("previous unencrypted notes kept for rollback",
+      fs.existsSync(c.file("noteforge-data.json.pre-restore.bak")) && fs.readFileSync(c.file("noteforge-data.json.pre-restore.bak"), "utf-8").includes("alpha body"));
   },
 };
 

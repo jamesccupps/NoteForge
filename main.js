@@ -596,33 +596,41 @@ ipcMain.handle("restore-backup", async () => {
 ipcMain.handle("verify-and-restore-backup", async (_e, backupPath, password) => {
   if (!pendingRestorePath || backupPath !== pendingRestorePath) return { error: "Choose the backup file again (File → Restore from Backup…)" };
   if (!fs.existsSync(backupPath)) return { error: "Backup file no longer exists" };
+  let raw;
   try {
-    const raw = fs.readFileSync(backupPath, "utf-8");
+    raw = fs.readFileSync(backupPath, "utf-8");
     // Re-check: the file may have changed since the user picked it
     const headerErr = backupHeaderError(JSON.parse(raw));
     if (headerErr) return { error: headerErr };
     // Test-decrypt — if this throws, the password is wrong and we do NOTHING destructive
     const result = decryptData(raw, password);
     result.key.fill(0); // zero the test key immediately; we'll re-derive on next unlock
-    // Password verified. Now it's safe to replace current data.
-    // Keep a local rollback copy first — a single "oh no" undo option.
-    const rollbackPath = encFile + ".pre-restore.bak";
-    if (fs.existsSync(encFile)) {
-      try { fs.copyFileSync(encFile, rollbackPath); } catch {}
-    }
-    writeFileAtomic(encFile, raw); // the bytes that just decrypted, not a re-read of the path
-    // Restore hint if exists
-    if (fs.existsSync(backupPath + ".hint")) {
-      fs.writeFileSync(hintFile, fs.readFileSync(backupPath + ".hint", "utf-8"), "utf-8");
-    }
-    // Remove plain file if exists
-    if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
-    lockSession();
-    pendingRestorePath = null;
-    return { success: true, needsRestart: true, rollbackPath: fs.existsSync(rollbackPath) ? rollbackPath : null };
   } catch (e) {
     return { error: "Could not decrypt backup — wrong password or corrupted file" };
   }
+  // Password verified. Copy whatever is there now (encrypted or not) to a rollback
+  // file before touching it; if that copy fails, stop. The old code only kept an
+  // encrypted rollback and unlinked an unencrypted noteforge-data.json outright.
+  let rollbackPath = null;
+  try {
+    for (const f of [encFile, plainFile]) {
+      if (fs.existsSync(f)) { fs.copyFileSync(f, f + ".pre-restore.bak"); rollbackPath = f + ".pre-restore.bak"; }
+    }
+  } catch (e) {
+    return { error: "Restore cancelled: could not save a rollback copy of your current notes (" + e.message + ")" };
+  }
+  try {
+    writeFileAtomic(encFile, raw); // the bytes that just decrypted, not a re-read of the path
+    if (fs.existsSync(backupPath + ".hint")) {
+      fs.writeFileSync(hintFile, fs.readFileSync(backupPath + ".hint", "utf-8"), "utf-8");
+    }
+    if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
+  } catch (e) {
+    return { error: "Restore failed partway (" + e.message + "). Your previous notes are in " + rollbackPath };
+  }
+  lockSession();
+  pendingRestorePath = null;
+  return { success: true, needsRestart: true, rollbackPath };
 });
 
 /* ═══════════════════════════════════════════════════════════════

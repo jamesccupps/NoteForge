@@ -1589,8 +1589,10 @@ function NoteForge(){
       if(r?.error){setPwError(r.error);return}
       setRestoreFlow(null);
       if(r?.needsRestart){
+        // Show this before switching phase: the unlock screen is an early return, so
+        // an alert opened after setAppPhase("needsPassword") never rendered.
+        await alertUser({title:"Restore complete",message:"Enter the backup password to unlock your restored data."+(r.rollbackPath?` Your previous notes were saved as ${r.rollbackPath}`:"")});
         dataRef.current=null;setData(null);setEncEnabled(true);setAppPhase("needsPassword");
-        await alertUser({title:"Restore complete",message:"Enter the backup password to unlock your restored data."+(r.rollbackPath?"\n\nYour previous data was saved as a rollback file next to your data folder.":"")});
       }
     }}/>}
 

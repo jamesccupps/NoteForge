@@ -65,6 +65,33 @@ const vaultValue = async (h, pw) => (await h.restart().invoke("unlock-master", p
     h.cleanup();
   }
 
+  section("Restore over unencrypted notes keeps a rollback copy");
+  {
+    const h = loadMain();
+    h.write("noteforge-data.json", CURRENT); // encryption never enabled
+    const backupPath = path.join(h.userData, "b.enc");
+    fs.writeFileSync(backupPath, makeBlob(BACKUP, BACKUP_PW));
+    await pick(h, backupPath);
+    const ok = await h.invoke("verify-and-restore-backup", backupPath, BACKUP_PW);
+    t("restore succeeds", ok.success === true, JSON.stringify(ok));
+    t("rollback path reported", ok.rollbackPath === h.file("noteforge-data.json.pre-restore.bak"), ok.rollbackPath);
+    t("rollback holds the previous unencrypted notes", h.read("noteforge-data.json.pre-restore.bak") === CURRENT);
+    t("live plaintext file removed", !h.exists("noteforge-data.json"));
+    t("vault holds the backup", (await vaultValue(h, BACKUP_PW)) === BACKUP);
+    h.cleanup();
+  }
+  {
+    const { h, backupPath } = await setup();
+    await pick(h, backupPath);
+    const realCopy = fs.copyFileSync;
+    fs.copyFileSync = () => { throw new Error("EACCES: simulated"); };
+    const r = await h.invoke("verify-and-restore-backup", backupPath, BACKUP_PW);
+    fs.copyFileSync = realCopy;
+    t("rollback copy failure cancels the restore", /Restore cancelled/.test(r.error || ""), JSON.stringify(r));
+    t("vault untouched when rollback can't be made", (await vaultValue(h, PW)) === CURRENT);
+    h.cleanup();
+  }
+
   section("Restore: legacy / weakened backups");
   {
     const { h, backupPath } = await setup();
