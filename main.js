@@ -311,28 +311,27 @@ ipcMain.handle("storage-get", async () => {
   return null;
 });
 
-ipcMain.handle("storage-set", async (_e, value) => {
-  try {
-    if (sessionKey) {
-      fs.writeFileSync(encFile, encryptWithSession(value), "utf-8");
-      if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
-    } else {
-      fs.writeFileSync(plainFile, value, "utf-8");
-    }
+// With encryption on and the session locked there is no key to write with. Falling
+// through to the plaintext branch here used to leave a decrypted copy next to the
+// .enc file whenever a save landed after lock or restore.
+function writeAppData(value) {
+  if (typeof value !== "string") return false;
+  if (sessionKey) {
+    fs.writeFileSync(encFile, encryptWithSession(value), "utf-8");
+    if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
     return true;
-  } catch (e) { return false; }
+  }
+  if (fs.existsSync(encFile)) return false;
+  fs.writeFileSync(plainFile, value, "utf-8");
+  return true;
+}
+
+ipcMain.handle("storage-set", async (_e, value) => {
+  try { return writeAppData(value); } catch (e) { return false; }
 });
 
 ipcMain.on("storage-set-sync", (event, value) => {
-  try {
-    if (sessionKey) {
-      fs.writeFileSync(encFile, encryptWithSession(value), "utf-8");
-      if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
-    } else {
-      fs.writeFileSync(plainFile, value, "utf-8");
-    }
-    event.returnValue = true;
-  } catch (e) { event.returnValue = false; }
+  try { event.returnValue = writeAppData(value); } catch (e) { event.returnValue = false; }
 });
 
 /* ═══════════════════════════════════════════════════════════════

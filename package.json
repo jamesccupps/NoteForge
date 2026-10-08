@@ -15,8 +15,9 @@
   "scripts": {
     "start": "electron .",
     "build:jsx": "babel app.jsx --out-file app.js --presets=@babel/preset-react",
-    "test": "node test/test_crypto.js && node test/test_xss.js && node test/test_input_hook.js && node test/test_install.js",
+    "test": "node test/test_crypto.js && node test/test_storage.js && node test/test_xss.js && node test/test_input_hook.js && node test/test_install.js",
     "test:crypto": "node test/test_crypto.js",
+    "test:storage": "node test/test_storage.js",
     "test:xss": "node test/test_xss.js && node test/test_input_hook.js",
     "test:install": "node test/test_install.js",
     "test:e2e": "node test/e2e/run.js",
