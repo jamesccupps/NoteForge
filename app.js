@@ -1753,6 +1753,13 @@ function NoteForge() {
             document.execCommand("insertText", false, "    ");
             return;
           }
+          // Tab / Shift+Tab in a list nests / un-nests the item (same as the Indent/Outdent
+          // buttons). Unhandled, the browser's default moved focus out of the editor.
+          if (node.nodeName === "LI") {
+            e.preventDefault();
+            document.execCommand(e.shiftKey ? "outdent" : "indent");
+            return;
+          }
           node = node.parentNode;
         }
       }

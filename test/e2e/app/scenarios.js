@@ -324,6 +324,42 @@ SCENARIOS.relockActiveNotebook = {
   },
 };
 
+SCENARIOS.listTabIndent = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = "<ul><li>one</li><li>two</li></ul><ol><li>first</li><li>second</li></ol>";
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor li")`);
+    // Put the caret at the end of a list item's text
+    const caretIn = (text) => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();
+      const li=[...ed.querySelectorAll("li")].find(l=>l.textContent===${JSON.stringify(text)});
+      const r=document.createRange();r.selectNodeContents(li);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r)})()`);
+    // Real key events (sendInputEvent), so the browser's default Tab handling is exercised
+    const press = async (modifiers = []) => {
+      c.win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Tab", modifiers });
+      c.win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Tab", modifiers });
+      await c.sleep(300);
+    };
+    const nested = (text) => c.js(`[...document.querySelectorAll(".nf-editor ul ul li, .nf-editor ol ol li")].some(l=>l.textContent===${JSON.stringify(text)})`);
+    const editorFocused = () => c.js(`document.activeElement===document.querySelector(".nf-editor")`);
+
+    await caretIn("two");
+    await press();
+    c.check("Tab in a bullet nests it one level deeper", await nested("two"), await c.js(`document.querySelector(".nf-editor").innerHTML`));
+    c.check("focus stays in the editor after Tab", await editorFocused(), await c.js(`document.activeElement?.className||document.activeElement?.tagName`));
+    await press(["shift"]);
+    c.check("Shift+Tab moves it back out", !(await nested("two")), await c.js(`document.querySelector(".nf-editor").innerHTML`));
+    await caretIn("second");
+    await press();
+    c.check("Tab in a numbered list nests it", await nested("second"), await c.js(`document.querySelector(".nf-editor").innerHTML`));
+    await c.sleep(800);
+    c.check("nested list saved", /<ol>\s*<li>first<\/li>\s*<ol>|<li>first<ol>/.test(c.readData().notebooks[0].sections[0].pages[0].content),
+      c.readData().notebooks[0].sections[0].pages[0].content);
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"
