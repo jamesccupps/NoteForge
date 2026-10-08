@@ -46,6 +46,7 @@ t("Navigation guard present", /will-navigate/.test(main));
 t("Permission handler denies all", /setPermissionRequestHandler.*cb\(false\)/s.test(main));
 t("electron-updater require guarded", /try\s*{\s*autoUpdater\s*=\s*require\("electron-updater"\)/.test(main));
 t("verify-and-restore-backup handler present", /ipcMain\.handle\("verify-and-restore-backup"/.test(main));
+t("About dialog version comes from package.json", /"NoteForge v" \+ app\.getVersion\(\)/.test(main) && !/NoteForge v\d/.test(main));
 
 const appJsx = fs.readFileSync(path.join(root, "app.jsx"), "utf-8");
 t("sanitizeForDiskSync called in persist", appJsx.includes("sanitizeForDiskSync(toSave)"));
