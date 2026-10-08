@@ -176,6 +176,16 @@ input,select,button{font-family:inherit}
 .nf-editor a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
 
 /* Checklist */
+/* execCommand("fontSize") writes <font size="1-7">, which browsers render on a legacy
+   10/13/16/18/24/32/48px scale. Render each step at the size the toolbar labels it,
+   relative to the editor's zoomed base (--nf-fs), so labels and zoom both hold. */
+.nf-editor font[size="1"]{font-size:calc(var(--nf-fs,14px)*10/14)}
+.nf-editor font[size="2"]{font-size:calc(var(--nf-fs,14px)*12/14)}
+.nf-editor font[size="3"]{font-size:var(--nf-fs,14px)}
+.nf-editor font[size="4"]{font-size:calc(var(--nf-fs,14px)*16/14)}
+.nf-editor font[size="5"]{font-size:calc(var(--nf-fs,14px)*18/14)}
+.nf-editor font[size="6"]{font-size:calc(var(--nf-fs,14px)*24/14)}
+.nf-editor font[size="7"]{font-size:calc(var(--nf-fs,14px)*32/14)}
 /* Find & Replace matches (CSS Custom Highlight API) */
 ::highlight(nf-find){background-color:rgba(250,204,21,.35)}
 ::highlight(nf-find-current){background-color:#f59e0b;color:#111}
@@ -380,7 +390,7 @@ input,select,button{font-family:inherit}
   .nf-title-input{color:#111;background:none;border:none;padding:0}
   .nf-editor{
     overflow:visible !important;height:auto;min-height:0;padding:0;background:#fff;color:#111;
-    font-size:14px !important;white-space:pre-wrap !important;
+    font-size:14px !important;--nf-fs:14px !important;white-space:pre-wrap !important;
     -webkit-print-color-adjust:exact;print-color-adjust:exact;
   }
   .nf-editor pre{white-space:pre-wrap;overflow:visible}

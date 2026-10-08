@@ -471,6 +471,41 @@ SCENARIOS.printLayout = {
   },
 };
 
+SCENARIOS.fontSizes = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = "<p>plain text</p><p>sized text</p>";
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor p")`);
+    const sizeSelect = `document.querySelectorAll(".nf-toolbar select")[1]`;
+    const caretIn = (text) => c.js(`(()=>{const p=[...document.querySelectorAll(".nf-editor p")].find(e=>e.textContent===${JSON.stringify(text)});
+      const r=document.createRange();r.selectNodeContents(p.querySelector("font")||p);const s=getSelection();s.removeAllRanges();s.addRange(r);document.querySelector(".nf-editor").focus()})()`);
+    const shown = async () => { await c.sleep(150); return c.js(`${sizeSelect}.options[${sizeSelect}.selectedIndex].text`); };
+    await caretIn("plain text");
+    c.check("plain 14px text shows 14px", (await shown()) === "14px", await shown());
+    const rows = [];
+    for (const v of ["1", "2", "3", "4", "5", "6", "7"]) {
+      await caretIn("sized text");
+      await c.js(`(()=>{const s=${sizeSelect};Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,"value").set.call(s,"${v}");s.dispatchEvent(new Event("change",{bubbles:true}))})()`);
+      await c.sleep(150);
+      const label = await c.js(`[...${sizeSelect}.options].find(o=>o.value==="${v}").text`);
+      const actual = await c.js(`getComputedStyle([...document.querySelectorAll(".nf-editor p")].find(e=>e.textContent==="sized text").querySelector("font")).fontSize`);
+      await caretIn("sized text");
+      rows.push(`${label}=${actual}/${await shown()}`);
+    }
+    c.check("each size renders at its label and reads back the same",
+      rows.join(" ") === "10px=10px/10px 12px=12px/12px 14px=14px/14px 16px=16px/16px 18px=18px/18px 24px=24px/24px 32px=32px/32px", rows.join(" "));
+    c.menu("zoom-in"); c.menu("zoom-in"); // 120%
+    await c.sleep(300);
+    await caretIn("sized text");
+    c.check("sized text scales with zoom and still reads 32px",
+      (await c.js(`getComputedStyle(document.querySelector(".nf-editor font")).fontSize`)) === "38.4px" && (await shown()) === "32px",
+      (await c.js(`getComputedStyle(document.querySelector(".nf-editor font")).fontSize`)) + " / " + (await shown()));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

@@ -661,7 +661,7 @@ ipcMain.handle("export-html", async (_e, title, html, isLocked) => {
     filters: [{ name: "HTML", extensions: ["html"] }, { name: "All", extensions: ["*"] }],
   });
   if (result.canceled || !result.filePath) return false;
-  const doc = `<!DOCTYPE html>\n<html><head><meta charset="UTF-8"><title>${safeTitle}</title>\n<style>body{font-family:'DM Sans','Segoe UI',sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1a1a1a}h1,h2,h3,h4{margin:.5em 0 .3em}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}pre{background:#f5f5f5;padding:12px;border-radius:8px;overflow-x:auto}code{background:#f5f5f5;padding:2px 6px;border-radius:4px}blockquote{border-left:3px solid #6359d0;padding-left:12px;opacity:.85}</style>\n</head><body>${html}</body></html>`;
+  const doc = `<!DOCTYPE html>\n<html><head><meta charset="UTF-8"><title>${safeTitle}</title>\n<style>body{font-family:'DM Sans','Segoe UI',sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1a1a1a}h1,h2,h3,h4{margin:.5em 0 .3em}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}pre{background:#f5f5f5;padding:12px;border-radius:8px;overflow-x:auto}code{background:#f5f5f5;padding:2px 6px;border-radius:4px}blockquote{border-left:3px solid #6359d0;padding-left:12px;opacity:.85}font[size="1"]{font-size:.714em}font[size="2"]{font-size:.857em}font[size="3"]{font-size:1em}font[size="4"]{font-size:1.143em}font[size="5"]{font-size:1.286em}font[size="6"]{font-size:1.714em}font[size="7"]{font-size:2.286em}</style>\n</head><body>${html}</body></html>`;
   fs.writeFileSync(result.filePath, doc, "utf-8");
   return true;
 });

@@ -1862,7 +1862,12 @@ function NoteForge() {
         const sel = document.getSelection();
         if (!sel?.anchorNode || !edRef.current.contains(sel.anchorNode)) return;
         const block = (document.queryCommandValue("formatBlock") || "div").toLowerCase();
-        const size = document.queryCommandValue("fontSize") || "3";
+        // queryCommandValue("fontSize") maps through the browser's legacy 10/13/16/18/24/32/48
+        // scale, so normal 14px text read back as "12px". Use the computed size at the caret,
+        // relative to the editor's (zoomed) base, and show the nearest menu entry.
+        const el = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+        const px = parseFloat(getComputedStyle(el).fontSize) * 14 / parseFloat(getComputedStyle(edRef.current).fontSize);
+        const size = FONT_SIZES.reduce((a, b) => Math.abs(+b.l - px) < Math.abs(+a.l - px) ? b : a).v;
         setToolbarFmt(p => p.block === block && p.size === size ? p : {
           block,
           size
@@ -2484,7 +2489,7 @@ function NoteForge() {
     const parentNb = aNb ? dataRef.current?.notebooks.find(n => n.id === aNb) : null;
     const isLocked = !!parentNb?.locked;
     if (window.electronAPI) await window.electronAPI.exportHTML(curPage.title, cleanHTML, isLocked);else {
-      const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(curPage.title)}</title><style>body{font-family:'DM Sans',sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1a1a1a}h1,h2,h3,h4{margin:.5em 0 .3em}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}pre{background:#f5f5f5;padding:14px;border-radius:8px;overflow-x:auto}code{background:#f5f5f5;padding:2px 6px;border-radius:4px}blockquote{border-left:3px solid #6359d0;padding-left:14px;opacity:.85}</style></head><body>${cleanHTML}</body></html>`;
+      const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHtml(curPage.title)}</title><style>body{font-family:'DM Sans',sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1a1a1a}h1,h2,h3,h4{margin:.5em 0 .3em}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px}pre{background:#f5f5f5;padding:14px;border-radius:8px;overflow-x:auto}code{background:#f5f5f5;padding:2px 6px;border-radius:4px}blockquote{border-left:3px solid #6359d0;padding-left:14px;opacity:.85}font[size="1"]{font-size:.714em}font[size="2"]{font-size:.857em}font[size="3"]{font-size:1em}font[size="4"]{font-size:1.143em}font[size="5"]{font-size:1.286em}font[size="6"]{font-size:1.714em}font[size="7"]{font-size:2.286em}</style></head><body>${cleanHTML}</body></html>`;
       const b = new Blob([doc], {
         type: "text/html"
       });
@@ -3587,6 +3592,7 @@ function NoteForge() {
     },
     style: {
       fontSize: `${14 * zoom / 100}px`,
+      "--nf-fs": `${14 * zoom / 100}px`,
       whiteSpace: wrap ? "pre-wrap" : "pre",
       overflowX: wrap ? "hidden" : "auto",
       wordWrap: wrap ? "break-word" : "normal"
