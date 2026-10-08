@@ -11,7 +11,9 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf-8")
 t("package.json valid JSON", true);
 t("main field correct", pkg.main === "main.js");
 t("has electron-builder config", !!pkg.build);
-t("electron >= 33", parseInt(pkg.devDependencies.electron.replace(/\D/g, "")) >= 330);
+// Electron supports only the latest three majors; 44 was current when this was written.
+const electronMajor = parseInt(pkg.devDependencies.electron.replace(/^[^\d]*/, ""), 10);
+t(`electron major >= 44 (got ${electronMajor})`, electronMajor >= 44);
 
 for (const f of ["main.js", "preload.js", "app.js"]) {
   try { new vm.Script(fs.readFileSync(path.join(root, f), "utf-8")); t(`${f} syntactically valid`, true); }

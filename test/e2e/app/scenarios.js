@@ -197,8 +197,9 @@ SCENARIOS.uncImagesBlocked = {
     await c.js(`(()=>{const img=new Image();img.src="//127.0.0.1/nf-e2e-share/c.png";document.body.appendChild(img);
       const bg=document.createElement("div");bg.style.background="url(//127.0.0.1/nf-e2e-share/d.png)";bg.textContent="x";document.body.appendChild(bg);})()`);
     await c.sleep(1500);
-    // Violation events only report the scheme ("file"), so use Chromium's console refusal.
-    const refused = (f) => new RegExp(`Refused to load the image 'file://127\.0\.0\.1/nf-e2e-share/${f}'.*"img-src data:"`);
+    // Violation events only report the scheme ("file"), so use Chromium's console message
+    // ("Refused to load the image '...'" before Chromium ~140, "Loading the image '...' violates" after).
+    const refused = (f) => new RegExp(`the image 'file://127\.0\.0\.1/nf-e2e-share/${f}'.*"img-src data:"`);
     c.check("CSP blocks the seeded UNC CSS background", c.consumeConsoleErrors(refused("b.png")).length === 1);
     c.check("CSP blocks a UNC <img> injected directly", c.consumeConsoleErrors(refused("c.png")).length === 1);
     c.check("CSP blocks a UNC CSS background set from script", c.consumeConsoleErrors(refused("d.png")).length === 1);
@@ -233,9 +234,10 @@ SCENARIOS.contextMenuPaste = {
   async run(c) {
     // Uses the real system clipboard; the text that was on it is put back afterwards.
     const { clipboard } = require("electron");
-    const saved = clipboard.readText();
+    // Electron 44 made the clipboard methods async (W3C Clipboard API shape).
+    const saved = await clipboard.readText();
     try {
-      clipboard.writeText("PASTED-FROM-CLIPBOARD");
+      await clipboard.writeText("PASTED-FROM-CLIPBOARD");
       await c.waitFor(`document.querySelector(".nf-editor")`);
       await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const r=document.createRange();
         r.selectNodeContents(ed);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r);
@@ -247,7 +249,7 @@ SCENARIOS.contextMenuPaste = {
       c.check("context-menu Paste inserts clipboard text at the caret", /alpha body\s*PASTED-FROM-CLIPBOARD/.test(text), JSON.stringify(text));
       c.check("pasted text saved", JSON.stringify(c.readData()).includes("PASTED-FROM-CLIPBOARD"));
     } finally {
-      clipboard.writeText(saved);
+      await clipboard.writeText(saved);
     }
   },
 };
