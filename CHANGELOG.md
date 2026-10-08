@@ -5,6 +5,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+### Fixed
+- Removed a startup read of `index.html` added in 2.8.0 as a workaround for an Electron asar-integrity gap. The gap doesn't exist: a separate investigation found Electron 44 does validate `index.html` loaded from the asar (tampered copies are rejected with or without the read). The 2.8.0 note below is corrected accordingly.
+
 ## [2.8.0] — 2026-10-08
 
 Audit pass. Every fix below was reproduced against 2.7.2 first and has a regression test that fails on the old code.
@@ -24,7 +27,7 @@ Audit pass. Every fix below was reproduced against 2.7.2 first and has a regress
 - **The renderer can no longer turn off its own sandbox** through `set-config`, and config values are type-checked. Editing `noteforge-config.json` by hand still works.
 - **Restore only installs the file the user picked**, and re-checks its format (v2, scrypt, minimum N) right before installing it.
 - **scrypt `r` and `p` are capped (≤ 32, ≤ 16), and N/r/p must be integers.** A crafted header could otherwise make `scryptSync` block the main process for hours.
-- **Electron fuses on the packaged app:** no RunAsNode, no `NODE_OPTIONS`, no `--inspect`. Embedded asar integrity is on, and `index.html` is read through the integrity check before it loads.
+- **Electron fuses on the packaged app:** no RunAsNode, no `NODE_OPTIONS`, no `--inspect`. Embedded asar integrity is on.
 - Bundled DOMPurify 3.3.3 → 3.4.16 (mXSS fixes from 3.4.0, later hardening).
 - Electron 33 → 44 (Chromium security fixes; 33 has been end-of-life since mid-2025). electron-builder 25 → 26, electron-updater 6.3 → 6.8.
 
