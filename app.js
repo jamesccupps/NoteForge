@@ -2029,6 +2029,9 @@ function NoteForge() {
           const sid = aSecRef.current && (nb.sections || []).find(s => s.id === aSecRef.current) ? aSecRef.current : nb.sections[0].id;
           menuActions.current.addPage(nb.id, sid);
         }
+        // A notebook with no sections yet (not a locked one, whose sections are just hidden):
+        // Ctrl+N used to do nothing; create a section to hold the page.
+        else if (nb && !nb.locked) menuActions.current.addSectionWithPage(nb.id);
       }
     });
     return cleanup;
@@ -2118,6 +2121,34 @@ function NoteForge() {
     }));
     setEditId(id);
     setEditVal("New Section");
+  };
+  const addSectionWithPage = nbId => {
+    const secId = uid(),
+      pgId = uid(),
+      d = dataRef.current;
+    persist({
+      ...d,
+      notebooks: d.notebooks.map(n => n.id !== nbId ? n : {
+        ...n,
+        sections: [...(n.sections || []), {
+          id: secId,
+          name: "New Section",
+          color: n.color,
+          pages: [{
+            id: pgId,
+            title: "New Page",
+            content: "<p><br></p>",
+            created: Date.now(),
+            modified: Date.now(),
+            pinned: false,
+            deleted: false
+          }]
+        }]
+      })
+    });
+    navigateTo(nbId, secId, pgId);
+    setEditId(pgId);
+    setEditVal("New Page");
   };
   const addPage = (nbId, secId) => {
     const id = uid();
@@ -2710,6 +2741,7 @@ function NoteForge() {
     emptyTrash,
     addNotebook,
     addPage,
+    addSectionWithPage,
     openFind
   };
   const findItem = id => {

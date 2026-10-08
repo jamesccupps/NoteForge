@@ -798,6 +798,30 @@ SCENARIOS.escapeCloses = {
   },
 };
 
+SCENARIOS.newPageInEmptyNotebook = {
+  seed: () => {
+    const d = seedLocked();
+    d.notebooks.push({ id: "nb-e", name: "Empty", color: "#3b82f6", sections: [] });
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(R.nb("Empty"));
+    await c.js(`${R.nb("Empty")}.click()`); await c.sleep(200);
+    c.menu("new-page"); await c.sleep(400);
+    const d = await c.waitForData((d) => d.notebooks.find((n) => n.id === "nb-e").sections.length === 1);
+    const nb = d.notebooks.find((n) => n.id === "nb-e");
+    c.check("Ctrl+N in an empty notebook creates a section with a page",
+      nb.sections.length === 1 && nb.sections[0].pages.length === 1, JSON.stringify(nb.sections.map((s) => [s.name, s.pages.length])));
+    c.check("the new page is open with its name ready to edit",
+      (await c.js(`document.querySelector(".nf-title-input")?.value`)) === "New Page" && (await c.js(`!!document.querySelector(".nf-rename")`)));
+    await c.js(`${R.nb("Locked")}.click()`); await c.sleep(200);
+    await c.js(`${R.button(".nf-overlay-btn", "Cancel")}.click()`); await c.sleep(200);
+    c.menu("new-page"); await c.sleep(400);
+    c.check("still-locked notebook: no section added",
+      c.readData().notebooks.find((n) => n.id === "nb-l").sections.length === 0 && !!c.readData().notebooks.find((n) => n.id === "nb-l").encSections);
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

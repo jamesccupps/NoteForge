@@ -975,6 +975,9 @@ function NoteForge(){
           const sid=aSecRef.current&&(nb.sections||[]).find(s=>s.id===aSecRef.current)?aSecRef.current:nb.sections[0].id;
           menuActions.current.addPage(nb.id,sid);
         }
+        // A notebook with no sections yet (not a locked one, whose sections are just hidden):
+        // Ctrl+N used to do nothing; create a section to hold the page.
+        else if(nb&&!nb.locked)menuActions.current.addSectionWithPage(nb.id);
       }
     });
     return cleanup;
@@ -1016,6 +1019,12 @@ function NoteForge(){
     const id=uid();const d=dataRef.current;
     persist({...d,notebooks:d.notebooks.map(n=>n.id!==nbId?n:{...n,sections:[...(n.sections||[]),{id,name:"New Section",color:n.color,pages:[]}]})});
     setANb(nbId);setASec(id);setAPg(null);setExpNb(p=>({...p,[nbId]:true}));setEditId(id);setEditVal("New Section");
+  };
+  const addSectionWithPage=(nbId)=>{
+    const secId=uid(),pgId=uid(),d=dataRef.current;
+    persist({...d,notebooks:d.notebooks.map(n=>n.id!==nbId?n:{...n,sections:[...(n.sections||[]),{id:secId,name:"New Section",color:n.color,
+      pages:[{id:pgId,title:"New Page",content:"<p><br></p>",created:Date.now(),modified:Date.now(),pinned:false,deleted:false}]}]})});
+    navigateTo(nbId,secId,pgId);setEditId(pgId);setEditVal("New Page");
   };
   const addPage=(nbId,secId)=>{
     const id=uid();const d=dataRef.current;
@@ -1334,7 +1343,7 @@ function NoteForge(){
     else{const b=new Blob([text],{type:"text/plain"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=curPage.title.replace(/[^a-z0-9]/gi,"_")+".txt";a.click();URL.revokeObjectURL(a.href)}
   };
 
-  menuActions.current={doExportHTML,doExportText,emptyTrash,addNotebook,addPage,openFind};
+  menuActions.current={doExportHTML,doExportText,emptyTrash,addNotebook,addPage,addSectionWithPage,openFind};
 
   const findItem=(id)=>{
     if(!data)return null;
