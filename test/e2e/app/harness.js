@@ -51,6 +51,12 @@ function makeCtx(win) {
   return {
     win, tmp, sleep, js,
     dialogs: out.dialogs,
+    // Returns and removes console errors matching re, for scenarios that expect them.
+    consumeConsoleErrors(re) {
+      const hit = out.consoleErrors.filter((m) => re.test(m));
+      out.consoleErrors = out.consoleErrors.filter((m) => !re.test(m));
+      return hit;
+    },
     check: (name, ok, detail) => out.checks.push({ name, ok: !!ok, detail: detail === undefined ? undefined : String(detail) }),
     async waitFor(expr, ms = 10000) {
       const t0 = Date.now();

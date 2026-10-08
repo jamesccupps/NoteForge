@@ -182,4 +182,27 @@ SCENARIOS.navigationBlocked = {
   },
 };
 
+SCENARIOS.uncImagesBlocked = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content =
+      '<p>pic</p><img src="//127.0.0.1/nf-e2e-share/a.png"><div style="background:url(//127.0.0.1/nf-e2e-share/b.png)">bg</div>';
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    c.check("sanitizer removed the UNC img src on load",
+      (await c.js(`[...document.querySelectorAll(".nf-editor img")].every(i=>!i.hasAttribute("src"))`)) === true);
+    // Bypass the sanitizer entirely: the CSP alone must stop a UNC image.
+    await c.js(`(()=>{const img=new Image();img.src="//127.0.0.1/nf-e2e-share/c.png";document.body.appendChild(img);
+      const bg=document.createElement("div");bg.style.background="url(//127.0.0.1/nf-e2e-share/d.png)";bg.textContent="x";document.body.appendChild(bg);})()`);
+    await c.sleep(1500);
+    // Violation events only report the scheme ("file"), so use Chromium's console refusal.
+    const refused = (f) => new RegExp(`Refused to load the image 'file://127\.0\.0\.1/nf-e2e-share/${f}'.*"img-src data:"`);
+    c.check("CSP blocks the seeded UNC CSS background", c.consumeConsoleErrors(refused("b.png")).length === 1);
+    c.check("CSP blocks a UNC <img> injected directly", c.consumeConsoleErrors(refused("c.png")).length === 1);
+    c.check("CSP blocks a UNC CSS background set from script", c.consumeConsoleErrors(refused("d.png")).length === 1);
+  },
+};
+
 module.exports = { SCENARIOS, R, NB_PW, seedBase, seedLocked, unlockNotebook };

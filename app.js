@@ -202,13 +202,20 @@ function decodeEntities(s) {
    Strips script tags, event handlers, javascript: URLs, etc.
    Applied before any HTML is set as innerHTML.
    Additional hook: restrict <input type=...> to checkbox only, so a malicious
-   paste can't inject <input type="password"> for in-note phishing. */
+   paste can't inject <input type="password"> for in-note phishing, and restrict
+   <img src> to data: URIs. */
 let _dompurifyHookInstalled = false;
 function installDOMPurifyHook() {
   if (_dompurifyHookInstalled || !window.DOMPurify) return;
   window.DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
     if (node.nodeName === "INPUT" && data.attrName === "type") {
       if (String(data.attrValue).toLowerCase() !== "checkbox") data.keepAttr = false;
+    }
+    // Images load the moment a note is shown. Only inline data: images are allowed:
+    // on file:// a protocol-relative src like //host/share/x.png resolves to a UNC
+    // path, and Windows opens an SMB session to that host (leaking an NTLM hash).
+    if (node.nodeName === "IMG" && data.attrName === "src") {
+      if (!/^data:image\//i.test(String(data.attrValue))) data.keepAttr = false;
     }
   });
   _dompurifyHookInstalled = true;

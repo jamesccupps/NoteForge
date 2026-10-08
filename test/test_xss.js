@@ -75,6 +75,16 @@ for (const [html, label, ok] of legit) {
   t(`Preserves ${label}`, ok(clean), clean);
 }
 
+console.log("\n=== Images can't load from the network or a UNC path ===");
+// On file:// a protocol-relative URL resolves to file://host/..., which Windows opens over SMB.
+const srcs = ["//127.0.0.1/share/x.png", "\\\\127.0.0.1\\share\\x.png", "file://127.0.0.1/share/x.png",
+  "file:///C:/Windows/win.ini", "http://example.com/x.png", "https://example.com/x.png", "x.png", " DATA:text/html,x"];
+for (const src of srcs) {
+  const clean = sanitizeHTML(`<img src="${src}" alt="a">`);
+  t(`img src "${src}" removed`, !/src=/i.test(clean), clean);
+}
+t("img data:image/jpeg kept", /src="data:image\/jpeg;base64,AAAA"/.test(sanitizeHTML('<img src="data:image/jpeg;base64,AAAA">')));
+
 console.log("\n=== CSS url() relies on CSP ===");
 // DOMPurify does not parse CSS, so url() inside a style attribute survives. The CSP
 // img-src directive is what stops it from loading anything.
@@ -82,7 +92,9 @@ const styled = sanitizeHTML('<div style="background:url(http://evil/steal)">x</d
 t("style url() survives DOMPurify (documented; CSP must block it)", /url\(/.test(styled));
 const csp = (fs.readFileSync(path.join(root, "index.html"), "utf-8").match(/Content-Security-Policy" content="([^"]+)"/) || [])[1] || "";
 t("CSP present", csp.length > 0);
-t("CSP img-src does not allow http(s)", /img-src[^;]*/.test(csp) && !/img-src[^;]*(https?:|\*)/.test(csp.match(/img-src[^;]*/)[0]));
+// 'self' is not safe here: on a file:// page Chromium matches it against any file: URL,
+// including file://host/share (UNC).
+t("CSP img-src is data: only", (csp.match(/img-src([^;]*)/) || [])[1]?.trim() === "data:", csp);
 
 console.log("\n=== Summary ===");
 console.log(`  ${pass} passed, ${fail} failed`);
