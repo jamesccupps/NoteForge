@@ -93,6 +93,9 @@ app.on("browser-window-created", (_e, win) => {
   });
   win.webContents.once("did-finish-load", async () => {
     try {
+      // Focus-sensitive checks (rename inputs commit on blur) flake if another window
+      // has OS focus, e.g. when the suite runs on a desktop someone is using.
+      win.show(); win.focus();
       await scenario.run(makeCtx(win));
       finish({});
     } catch (e) {
