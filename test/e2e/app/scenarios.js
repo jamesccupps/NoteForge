@@ -612,6 +612,53 @@ SCENARIOS.tableTab = {
   },
 };
 
+SCENARIOS.exitCodeAndQuote = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = "<p>intro</p>";
+    return d;
+  },
+  async run(c) {
+    const key = async (keyCode, modifiers = []) => {
+      c.win.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
+      if (keyCode === "Enter") c.win.webContents.sendInputEvent({ type: "char", keyCode: "\r", modifiers });
+      c.win.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
+      await c.sleep(150);
+    };
+    const type = async (t) => { for (const ch of t) c.win.webContents.sendInputEvent({ type: "char", keyCode: ch }); await c.sleep(200); };
+    const html = () => c.js(`document.querySelector(".nf-editor").innerHTML`);
+    const setup = async (content) => {
+      await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML=${JSON.stringify(content)};ed.focus();
+        const b=ed.querySelector("pre,blockquote");const s=getSelection();s.selectAllChildren(b);s.collapseToEnd()})()`);
+    };
+    await c.waitFor(`document.querySelector(".nf-editor p")`);
+
+    await setup("<pre>const x = 1;</pre>");
+    await key("Enter"); await type("y();");
+    c.check("Enter in a code block adds a line inside it", /<pre>const x = 1;<br>y\(\);/.test(await html()), await html());
+    await key("Enter"); await key("Enter"); await type("after");
+    c.check("Enter on the empty last line leaves the code block",
+      /<\/pre><p>after<\/p>$/.test(await html()) && !(await c.js(`document.querySelector(".nf-editor pre").textContent.includes("after")`)), await html());
+
+    await setup("<pre>one</pre><p>next para</p>");
+    await key("Enter"); await key("Enter"); await type("between");
+    c.check("…also when content follows the block", /<\/pre><p>between<\/p><p>next para<\/p>$/.test(await html()), await html());
+    c.win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Z", modifiers: ["control"] });
+    c.win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Z", modifiers: ["control"] });
+    await c.sleep(200);
+    c.check("undo still works afterwards (no text lost)", (await c.js(R.editorText)).includes("one") && (await c.js(R.editorText)).includes("next para"), await html());
+
+    await setup("<blockquote>quoted</blockquote>");
+    await key("Enter"); await type("more");
+    await key("Enter"); await key("Enter"); await type("out");
+    c.check("Enter on an empty quote line leaves the quote", /<blockquote>more<\/blockquote><p>out<\/p>$/.test(await html()), await html());
+
+    await setup("<pre>keep</pre>");
+    await key("Enter", ["shift"]); await key("Enter", ["shift"]); await type("z");
+    c.check("Shift+Enter still just adds lines inside the block", /<pre>keep(<br>)+z<\/pre>/.test(await html()), await html());
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

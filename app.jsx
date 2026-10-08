@@ -182,6 +182,18 @@ function serializeEditor(el){
   return c.innerHTML;
 }
 
+/* True when a collapsed caret sits at the very end of `block` on an empty line, i.e. the
+   last thing before it is a line break (<br> or "\n") and nothing visible follows. */
+function caretOnEmptyLastLine(block,sel){
+  const after=document.createRange();after.selectNodeContents(block);after.setStart(sel.anchorNode,sel.anchorOffset);
+  if(after.toString().length)return false;
+  const before=document.createRange();before.selectNodeContents(block);before.setEnd(sel.anchorNode,sel.anchorOffset);
+  let last=before.cloneContents().lastChild;
+  while(last&&last.nodeType===3&&last.textContent==="")last=last.previousSibling;
+  while(last&&last.nodeType===1&&last.nodeName!=="BR"&&last.lastChild)last=last.lastChild;
+  return !!last&&(last.nodeName==="BR"||(last.nodeType===3&&/\n$/.test(last.textContent)));
+}
+
 /* ── Image downscale helper ────────────────────────────────────
    Large pasted photos are resized to IMG_DOWNSCALE_TARGET_WIDTH and
    re-encoded as JPEG. Keeps the encrypted data file lean. */
@@ -829,6 +841,30 @@ function NoteForge(){
     if(html){const clean=sanitizeHTML(html);if(clean)document.execCommand("insertHTML",false,clean)}
   },[exec,alertUser]);
   const onKeyDown=useCallback(e=>{
+    // Enter on an empty last line leaves a code block or quote. Before, Enter only ever
+    // added lines inside them, so a note ending in a code block couldn't continue below it.
+    // Native commands only (delete / insertHTML / formatBlock / outdent) so undo still works.
+    if(e.key==="Enter"&&!e.shiftKey&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
+      const sel=window.getSelection();
+      if(sel.rangeCount&&sel.isCollapsed&&edRef.current?.contains(sel.anchorNode)){
+        const el=sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode;
+        const pre=el.closest("pre");
+        if(pre&&edRef.current.contains(pre)&&caretOnEmptyLastLine(pre,sel)){
+          e.preventDefault();
+          document.execCommand("delete");
+          sel.collapse(pre.parentNode,[...pre.parentNode.childNodes].indexOf(pre)+1);
+          document.execCommand("insertHTML",false,"<p><br></p>");
+          return;
+        }
+        const bq=!pre&&el.closest("blockquote");
+        if(bq&&edRef.current.contains(bq)){
+          const blk=el.closest("p,div,blockquote");
+          const empty=(n)=>!n.textContent.trim()&&!n.querySelector("img,table,hr,input");
+          if(blk===bq&&empty(bq)){e.preventDefault();document.execCommand("formatBlock",false,"p");return}
+          if(blk!==bq&&bq.contains(blk)&&empty(blk)){e.preventDefault();document.execCommand("outdent");return}
+        }
+      }
+    }
     if(e.key==="Tab"){
       const sel=window.getSelection();if(sel.anchorNode){
         let node=sel.anchorNode;
