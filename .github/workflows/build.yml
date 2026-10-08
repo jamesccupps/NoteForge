@@ -8,9 +8,8 @@ on:
 permissions:
   contents: write
 
-# GitHub delivered the v2.8.0 tag push twice; both runs raced electron-builder's
-# "find or create release" and produced two v2.8.0 releases. Serialise per tag so a
-# duplicate run finds the release the first one created.
+# The v2.8.0 tag push produced two runs; serialise per tag so a duplicate run waits
+# instead of racing the first one.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -40,8 +39,30 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Build and publish
+      # electron-builder 26's PublishManager awaits between looking up and caching its GitHub
+      # publisher, so concurrent uploads (installer, blockmap) each get one and each create a
+      # release: v2.8.1 came out split across two releases from a single run. Create one draft
+      # up front so every upload finds it, and publish it only once all assets are attached.
+      - name: Create draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" 'index($0, "## [" v "]")==1{f=1;next} /^## \[/{if(f)exit} f' CHANGELOG.md > release-notes.md
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$v" --notes-file release-notes.md
+
+      - name: Build and upload to the draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npx electron-builder --win --publish always
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          n=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq "[.[] | select(.tag_name == \"$GITHUB_REF_NAME\")] | length")
+          if [ "$n" != "1" ]; then echo "::error::expected one release for $GITHUB_REF_NAME, found $n"; exit 1; fi
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
