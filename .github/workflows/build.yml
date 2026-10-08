@@ -8,6 +8,13 @@ on:
 permissions:
   contents: write
 
+# GitHub delivered the v2.8.0 tag push twice; both runs raced electron-builder's
+# "find or create release" and produced two v2.8.0 releases. Serialise per tag so a
+# duplicate run finds the release the first one created.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: windows-latest
