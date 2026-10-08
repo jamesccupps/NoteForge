@@ -806,8 +806,7 @@ function NoteForge(){
   useEffect(()=>{
     const h=e=>{
       const mod=e.ctrlKey||e.metaKey;
-      if(mod&&e.key==="f"){e.preventDefault();setShowFR(p=>!p)}
-      if(mod&&e.key==="h"){e.preventDefault();setShowFR(true)}
+      if(mod&&(e.key==="f"||e.key==="h")){e.preventDefault();menuActions.current.openFind()}
       if(mod&&e.key==="d"&&!e.shiftKey){e.preventDefault();if(aPg)duplicatePage(aPg)}
       if(mod&&e.key==="l"){e.preventDefault();if(encEnabled)lockApp()}
       if(e.key==="F1"){e.preventDefault();setShowShortcuts(true)}
@@ -825,7 +824,7 @@ function NoteForge(){
     const cleanup=window.electronAPI.onMenuAction(a=>{
       if(a==="toggle-sidebar")setNavOpen(p=>!p);
       if(a==="toggle-theme")setDark(p=>!p);
-      if(a==="find-replace")setShowFR(p=>!p);
+      if(a==="find-replace")menuActions.current.openFind();
       if(a==="zoom-in")setZoom(z=>Math.min(200,z+10));
       if(a==="zoom-out")setZoom(z=>Math.max(50,z-10));
       if(a==="zoom-reset")setZoom(100);
@@ -1073,16 +1072,71 @@ function NoteForge(){
   const isNbLocked=(nb)=>nb.locked&&(!nb.sections||nb.sections.length===0)&&!unlockedNbs.has(nb.id);
 
   /* ═══ Find & Replace ═══════════════════════════════════════ */
-  const doFind=()=>{
-    if(!findT||!edRef.current)return;
-    const sel=window.getSelection();const r=document.createRange();
-    r.selectNodeContents(edRef.current);sel.removeAllRanges();sel.addRange(r);
-    if(window.find)window.find(findT,false,false,true);
+  // window.find() returns true in Electron but never moves the selection, so Find and
+  // Replace used to do nothing. Matches are collected by walking the editor's text nodes
+  // (a match must sit inside one text node, same as Replace All) and shown with the CSS
+  // Custom Highlight API, which leaves focus in the find box so Enter keeps going.
+  const findMatches=(q)=>{
+    const out=[];if(!q||!edRef.current)return out;
+    const needle=q.toLowerCase();
+    const w=document.createTreeWalker(edRef.current,NodeFilter.SHOW_TEXT,null);
+    while(w.nextNode()){
+      const n=w.currentNode,hay=n.textContent.toLowerCase();
+      for(let i=hay.indexOf(needle);i!==-1;i=hay.indexOf(needle,i+needle.length)){
+        const r=document.createRange();r.setStart(n,i);r.setEnd(n,i+q.length);out.push(r);
+      }
+    }
+    return out;
+  };
+  const showFindHighlights=(ms,cur)=>{
+    if(!window.CSS?.highlights)return;
+    CSS.highlights.set("nf-find",new Highlight(...ms));
+    if(cur)CSS.highlights.set("nf-find-current",new Highlight(cur));else CSS.highlights.delete("nf-find-current");
+  };
+  const clearFindHighlights=()=>{window.CSS?.highlights?.delete("nf-find");window.CSS?.highlights?.delete("nf-find-current")};
+  const findPos=useRef(-1);
+  const [findInfo,setFindInfo]=useState(null); // {index,count}
+  const findInputRef=useRef(null);
+  const replInputRef=useRef(null);
+  // Live count + highlights while typing in the find box
+  useEffect(()=>{
+    if(!showFR||!findT){clearFindHighlights();setFindInfo(null);findPos.current=-1;return}
+    const ms=findMatches(findT);findPos.current=-1;
+    showFindHighlights(ms,null);setFindInfo({index:0,count:ms.length});
+  },[findT,showFR,aPg]);
+  const doFind=(dir=1)=>{
+    const ms=findMatches(findT);
+    if(!ms.length){showFindHighlights([],null);setFindInfo({index:0,count:0});findPos.current=-1;return}
+    const n=ms.length;
+    const pos=findPos.current<0?(dir>0?0:n-1):(findPos.current+dir+n)%n;
+    findPos.current=pos;
+    showFindHighlights(ms,ms[pos]);
+    setFindInfo({index:pos+1,count:n});
+    ms[pos].startContainer.parentElement?.scrollIntoView({block:"nearest"});
   };
   const doReplace=()=>{
-    if(!findT||!edRef.current)return;const sel=window.getSelection();
-    if(sel.toString().toLowerCase()===findT.toLowerCase())document.execCommand("insertText",false,replT);
-    doFind();
+    const ms=findMatches(findT);
+    const pos=findPos.current;
+    if(pos>=0&&pos<ms.length){
+      const sel=window.getSelection();sel.removeAllRanges();sel.addRange(ms[pos]);
+      edRef.current.focus();
+      document.execCommand("insertText",false,replT); // fires input → onInput saves; undoable
+      findPos.current=pos-1; // the next match now sits at the same index
+    }
+    doFind(1);
+    replInputRef.current?.focus();
+  };
+  const openFind=()=>{
+    const s=window.getSelection()?.toString()||"";
+    if(s&&!s.includes("\n")&&s.length<200&&edRef.current?.contains(window.getSelection().anchorNode))setFindT(s);
+    setShowFR(true);
+    setTimeout(()=>{findInputRef.current?.focus();findInputRef.current?.select()},0);
+  };
+  const closeFind=()=>{
+    const ms=findMatches(findT),pos=findPos.current;
+    setShowFR(false);clearFindHighlights();
+    edRef.current?.focus();
+    if(pos>=0&&pos<ms.length){const sel=window.getSelection();sel.removeAllRanges();sel.addRange(ms[pos])}
   };
   const doReplAll=()=>{
     if(!findT||!edRef.current)return;
@@ -1095,6 +1149,7 @@ function NoteForge(){
       if(re.test(node.textContent))node.textContent=node.textContent.replace(new RegExp(escaped,"gi"),()=>replT);
     }
     onInput();
+    const left=findMatches(findT);findPos.current=-1;showFindHighlights(left,null);setFindInfo({index:0,count:left.length});
   };
 
   /* ═══ Global Search ════════════════════════════════════════ */
@@ -1149,7 +1204,7 @@ function NoteForge(){
     else{const b=new Blob([text],{type:"text/plain"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=curPage.title.replace(/[^a-z0-9]/gi,"_")+".txt";a.click();URL.revokeObjectURL(a.href)}
   };
 
-  menuActions.current={doExportHTML,doExportText,emptyTrash,addNotebook,addPage};
+  menuActions.current={doExportHTML,doExportText,emptyTrash,addNotebook,addPage,openFind};
 
   const findItem=(id)=>{
     if(!data)return null;
@@ -1483,19 +1538,24 @@ function NoteForge(){
         <Btn icon="quote" label="Blockquote" onClick={()=>exec("formatBlock","blockquote")} s={13}/>
         <Btn icon="code" label="Code Block" onClick={()=>exec("formatBlock","pre")} s={13}/>
         <Btn icon="hr" label="Horizontal Rule" onClick={()=>exec("insertHorizontalRule")} s={13}/><div className="tb-sep"/>
-        <Btn icon="search" label="Find & Replace" onClick={()=>setShowFR(!showFR)} active={showFR} s={13}/>
+        <Btn icon="search" label="Find & Replace" onClick={()=>showFR?closeFind():openFind()} active={showFR} s={13}/>
         <Btn icon="wrap" label="Word Wrap" onClick={()=>setWrap(!wrap)} active={wrap} s={13}/>
         <Btn icon="zin" label="Zoom In" onClick={()=>setZoom(z=>Math.min(200,z+10))} s={13}/>
         <span style={{fontSize:10,color:"var(--text-muted)",minWidth:28,textAlign:"center",userSelect:"none"}}>{zoom}%</span>
         <Btn icon="zout" label="Zoom Out" onClick={()=>setZoom(z=>Math.max(50,z-10))} s={13}/>
       </div>
       {showFR&&<div className="nf-find-bar fade-in">
-        <input className="nf-find-input" style={{width:160}} placeholder="Find…" value={findT} onChange={e=>setFindT(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doFind()}/>
-        <input className="nf-find-input" style={{width:160}} placeholder="Replace…" value={replT} onChange={e=>setReplT(e.target.value)}/>
-        <button className="nf-find-btn" onClick={doFind} style={{border:"1px solid var(--accent)",background:"var(--accent-bg)",color:"var(--accent)",fontWeight:600}}>Find</button>
+        <input ref={findInputRef} className="nf-find-input" style={{width:160}} placeholder="Find…" value={findT} onChange={e=>setFindT(e.target.value)}
+          title="Enter: next match · Shift+Enter: previous · Esc: close"
+          onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();doFind(e.shiftKey?-1:1)}if(e.key==="Escape"){e.preventDefault();closeFind()}}}/>
+        <input ref={replInputRef} className="nf-find-input" style={{width:160}} placeholder="Replace…" value={replT} onChange={e=>setReplT(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();doReplace()}if(e.key==="Escape"){e.preventDefault();closeFind()}}}/>
+        {findInfo&&<span className="nf-find-info" style={{color:findInfo.count?"var(--text-muted)":"var(--danger)"}}>
+          {findInfo.count?`${findInfo.index||"–"} of ${findInfo.count}`:"No matches"}</span>}
+        <button className="nf-find-btn" onClick={()=>doFind(1)} style={{border:"1px solid var(--accent)",background:"var(--accent-bg)",color:"var(--accent)",fontWeight:600}}>Find</button>
         <button className="nf-find-btn" onClick={doReplace} style={{border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)"}}>Replace</button>
         <button className="nf-find-btn" onClick={doReplAll} style={{border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)"}}>All</button>
-        <Btn icon="x" label="Close" onClick={()=>setShowFR(false)} s={13}/>
+        <Btn icon="x" label="Close" onClick={closeFind} s={13}/>
       </div>}
       <div className="nf-title-area">
         {breadcrumb&&<div className="nf-breadcrumb"><div className="nf-breadcrumb-dot" style={{background:breadcrumb.color}}/>{breadcrumb.nb} <span style={{opacity:.5}}>›</span> {breadcrumb.sec}</div>}

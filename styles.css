@@ -176,6 +176,10 @@ input,select,button{font-family:inherit}
 .nf-editor a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
 
 /* Checklist */
+/* Find & Replace matches (CSS Custom Highlight API) */
+::highlight(nf-find){background-color:rgba(250,204,21,.35)}
+::highlight(nf-find-current){background-color:#f59e0b;color:#111}
+.nf-find-info{font-size:11px;min-width:64px;white-space:nowrap}
 .nf-check{display:flex;align-items:flex-start;gap:8px;padding:3px 0}
 .nf-check input[type="checkbox"]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;margin-top:2px;flex-shrink:0}
 .nf-check label{cursor:pointer;flex:1}

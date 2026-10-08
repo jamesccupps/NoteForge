@@ -393,6 +393,58 @@ SCENARIOS.checklistTickSaved = {
   },
 };
 
+SCENARIOS.findReplace = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = "<p>cat dog cat bird CAT fish</p>";
+    return d;
+  },
+  async run(c) {
+    const key = async (keyCode, modifiers = []) => {
+      c.win.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
+      c.win.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
+      await c.sleep(150);
+    };
+    const type = async (text) => { for (const ch of text) c.win.webContents.sendInputEvent({ type: "char", keyCode: ch }); await c.sleep(250); };
+    const info = () => c.js(`document.querySelector(".nf-find-info")?.textContent||""`);
+    // Offset (in editor text) and text of the current-match highlight
+    const current = () => c.js(`(()=>{const h=CSS.highlights.get("nf-find-current");if(!h)return "none";const r=[...h][0];
+      const pre=document.createRange();pre.selectNodeContents(document.querySelector(".nf-editor"));pre.setEnd(r.startContainer,r.startOffset);
+      return pre.toString().length+":"+r.toString()})()`);
+    const focusedFind = () => c.js(`document.activeElement===document.querySelector(".nf-find-input")`);
+
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    await c.js(`document.querySelector(".nf-editor").focus()`);
+    await key("F", ["control"]);
+    c.check("Ctrl+F puts focus in the find box", await focusedFind());
+    await type("cat");
+    c.check("live count while typing", (await info()) === "– of 3", await info());
+    const seen = [];
+    for (let i = 0; i < 4; i++) { await key("Enter"); seen.push(`${await info()}@${await current()}`); }
+    c.check("Enter steps through matches and wraps", seen.join(" | ") === "1 of 3@0:cat | 2 of 3@8:cat | 3 of 3@17:CAT | 1 of 3@0:cat", seen.join(" | "));
+    await key("Enter", ["shift"]);
+    c.check("Shift+Enter goes back (wrapping)", `${await info()}@${await current()}` === "3 of 3@17:CAT", `${await info()}@${await current()}`);
+    c.check("focus stays in the find box", await focusedFind());
+    await key("Enter"); // back to 1 of 3
+    await c.js(`document.querySelectorAll(".nf-find-input")[1].focus()`);
+    await type("cow");
+    await c.js(`${R.button(".nf-find-btn", "Replace")}.click()`);
+    await c.sleep(300);
+    c.check("Replace swaps the current match only", (await c.js(R.editorText)) === "cow dog cat bird CAT fish", await c.js(R.editorText));
+    c.check("then moves to the next match", `${await info()}@${await current()}` === "1 of 2@8:cat", `${await info()}@${await current()}`);
+    await c.js(`document.querySelectorAll(".nf-find-input")[0].focus()`);
+    await c.js(R.type(`document.querySelectorAll(".nf-find-input")[0]`, "zebra"));
+    await c.sleep(200);
+    c.check("no-match feedback", (await info()) === "No matches", await info());
+    await key("Escape");
+    c.check("Escape closes the bar and returns to the editor",
+      !(await c.js(`!!document.querySelector(".nf-find-bar")`)) && (await c.js(`document.activeElement===document.querySelector(".nf-editor")`)));
+    c.check("highlights cleared on close", await c.js(`!CSS.highlights.has("nf-find")`));
+    const saved = await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes("cow"));
+    c.check("replacement saved", saved.notebooks[0].sections[0].pages[0].content === "<p>cow dog cat bird CAT fish</p>", saved.notebooks[0].sections[0].pages[0].content);
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"
