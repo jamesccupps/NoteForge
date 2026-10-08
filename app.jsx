@@ -1024,12 +1024,11 @@ function NoteForge(){
       dataRef.current=nd;
       setData(nd);
       setUnlockedNbs(p=>{const s=new Set(p);s.add(nbId);return s});
-      // Auto-select first page
-      if(sections[0]){
-        setASec(sections[0].id);
-        const pg=sections[0].pages?.find(p=>!p.deleted);
-        setAPg(pg?.id||null);
-      }else{setASec(null);setAPg(null)}
+      // Select its first page and make it the active notebook. Setting only sec/page left
+      // aNb on the previous notebook, and export/print decide whether to show the
+      // password-protected warnings from aNb.
+      const sec=sections[0];
+      navigateTo(nbId,sec?.id||null,sec?.pages?.find(p=>!p.deleted)?.id||null);
       return{};
     }catch{return{error:"Corrupted data"}}
   };

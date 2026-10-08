@@ -269,6 +269,22 @@ SCENARIOS.replaceAll = {
   },
 };
 
+SCENARIOS.lockedNotebookWarnings = {
+  seed: seedLocked,
+  async run(c) {
+    await c.waitFor(R.nb("Locked"));
+    await unlockNotebook(c, "Locked");
+    c.check("unlocked notebook becomes the active one",
+      (await c.js(`document.querySelector(".nf-nb.active")?.textContent||""`)).includes("Locked"));
+    await c.js(`document.querySelector('button[title="Export HTML"]').click()`);
+    await c.sleep(600);
+    c.check("Export HTML warns that the page is password-protected", c.dialogs.includes("Export Password-Protected Page"), c.dialogs.join(", "));
+    await c.js(`document.querySelector('button[title="Print"]').click()`);
+    await c.sleep(600);
+    c.check("Print warns before printing a password-protected page", c.dialogs.includes("Print Unencrypted"), c.dialogs.join(", "));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"
