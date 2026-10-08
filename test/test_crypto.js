@@ -62,6 +62,13 @@ const DATA = JSON.stringify({ notebooks: [{ id: "nb1", name: "Test", sections: [
     t("N=2^25 rejected (DoS cap)", !!(await h.invoke("unlock-master", PW)).error);
     h.write("noteforge-data.enc", makeBlob(DATA, PW, { header: { N: 20000 } }));
     t("non-power-of-2 N rejected", !!(await h.restart().invoke("unlock-master", PW)).error);
+    for (const [label, hdr] of [["p=65534 (accepted by maxmem, ~2 h of CPU)", { p: 65534 }], ["r=64", { r: 64 }],
+      ["p=17", { p: 17 }], ["string N", { N: "65536" }], ["fractional p", { p: 1.5 }]]) {
+      h.write("noteforge-data.enc", makeBlob(DATA, PW, { header: hdr }));
+      const t0 = Date.now();
+      const r = await h.restart().invoke("unlock-master", PW);
+      t(`${label} rejected without deriving`, !!r.error && Date.now() - t0 < 1000, `${JSON.stringify(r)} in ${Date.now() - t0} ms`);
+    }
     h.write("noteforge-data.enc", makeBlob(DATA, PW, { header: { salt: null } }));
     t("non-string salt rejected", !!(await h.restart().invoke("unlock-master", PW)).error);
     h.cleanup();

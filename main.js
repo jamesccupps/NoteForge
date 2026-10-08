@@ -61,13 +61,19 @@ const MIN_SCRYPT_N = 16384;  // legacy v1 floor; never accept weaker
 const MIN_SCRYPT_R = 8;
 const MIN_SCRYPT_P = 1;
 const MAX_SCRYPT_N = 1 << 20; // sanity cap — prevents DoS via huge N
+// Cost is linear in p, and maxmem alone still admits p up to ~65k at N=65536
+// (~2 h of scryptSync blocking the main process). Caps leave headroom far above
+// what NoteForge writes (r=8, p=1).
+const MAX_SCRYPT_R = 32;
+const MAX_SCRYPT_P = 16;
 function decryptData(encJson, password) {
   const obj = JSON.parse(encJson);
   const N = obj.N || 16384, r = obj.r || 8, p = obj.p || 1;
   // Reject weakened or malformed KDF parameters
+  if (![N, r, p].every(Number.isInteger)) throw new Error("Invalid KDF parameters");
   if (N < MIN_SCRYPT_N || N > MAX_SCRYPT_N) throw new Error("Invalid KDF parameters (N)");
-  if (r < MIN_SCRYPT_R) throw new Error("Invalid KDF parameters (r)");
-  if (p < MIN_SCRYPT_P) throw new Error("Invalid KDF parameters (p)");
+  if (r < MIN_SCRYPT_R || r > MAX_SCRYPT_R) throw new Error("Invalid KDF parameters (r)");
+  if (p < MIN_SCRYPT_P || p > MAX_SCRYPT_P) throw new Error("Invalid KDF parameters (p)");
   if ((N & (N - 1)) !== 0) throw new Error("Invalid KDF parameters (N must be power of 2)");
   // Validate field shapes before feeding to crypto APIs
   if (typeof obj.salt !== "string" || typeof obj.iv !== "string" ||
