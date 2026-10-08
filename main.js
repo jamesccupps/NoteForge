@@ -703,9 +703,11 @@ function createWindow() {
     },
   });
 
-  // Navigation guards
-  mainWindow.webContents.on("will-navigate", (e, url) => { if (!url.startsWith("file://")) e.preventDefault(); });
-  mainWindow.webContents.on("will-redirect", (e, url) => { if (!url.startsWith("file://")) e.preventDefault(); });
+  // Navigation guards. The app is one page loaded once by loadFile and never navigates.
+  // The old file:// allowance let the window load any local HTML file, which then got
+  // the preload bridge (window.electronAPI) and none of index.html's CSP.
+  mainWindow.webContents.on("will-navigate", (e) => e.preventDefault());
+  mainWindow.webContents.on("will-redirect", (e) => e.preventDefault());
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
 

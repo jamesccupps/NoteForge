@@ -90,8 +90,9 @@ const SCENARIOS = {
       const r = await c.js(`window.electronAPI.enableEncryption("Master!Passw0rd-e2e","")`);
       c.check("enable encryption", r && r.success, JSON.stringify(r));
       // The renderer only learns encryption is on from the settings flow or a restart;
-      // reload so it picks it up the way a relaunch would.
-      await c.js(`location.reload()`).catch(() => {});
+      // reload from main (page-initiated navigation is blocked) as a relaunch stand-in.
+      c.win.webContents.reload();
+      await c.sleep(500);
       await c.waitFor(`document.querySelector(".nf-overlay-input")`);
       await c.js(R.type(`document.querySelector(".nf-overlay-input")`, "Master!Passw0rd-e2e"));
       await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
@@ -158,6 +159,26 @@ SCENARIOS.saveFailureShown = {
     await c.sleep(1000);
     c.check("next successful write shows 'Saved'", (await status()) === "Saved", await status());
     c.check("content on disk after recovery", c.readData().notebooks[0].sections[0].pages[0].content === "<p>saved now</p>");
+  },
+};
+
+SCENARIOS.navigationBlocked = {
+  seed: seedBase,
+  async run(c) {
+    const fs = require("fs");
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const start = c.win.webContents.getURL();
+    const probe = c.file("probe.html");
+    fs.writeFileSync(probe, "<script>document.title='PROBE:'+typeof window.electronAPI</script>");
+    const url = "file:///" + probe.replace(/\\/g, "/");
+    await c.js(`location.href=${JSON.stringify(url)}`).catch(() => {});
+    await c.sleep(1500);
+    c.check("local file:// navigation blocked", c.win.webContents.getURL() === start, c.win.webContents.getURL());
+    c.check("probe page never ran", !c.win.getTitle().startsWith("PROBE"), c.win.getTitle());
+    await c.js(`location.href="https://example.com/"`).catch(() => {});
+    await c.sleep(800);
+    c.check("https navigation blocked", c.win.webContents.getURL() === start, c.win.webContents.getURL());
+    c.check("app still responsive", (await c.js(R.editorText)).includes("alpha body"));
   },
 };
 
