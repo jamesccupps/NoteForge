@@ -445,6 +445,32 @@ SCENARIOS.findReplace = {
   },
 };
 
+SCENARIOS.printLayout = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content =
+      Array.from({ length: 120 }, (_, i) => `<p>Paragraph ${i + 1} of a long note.</p>`).join("");
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor p")`);
+    const pdf = (await c.win.webContents.printToPDF({})).toString("latin1");
+    const pages = (pdf.match(/\/Type\s*\/Page(?!s)/g) || []).length;
+    c.check("a long note prints across several pages", pages >= 3, `${pages} page(s)`);
+    // Emulate print media to check what is hidden and the colours used
+    const dbg = c.win.webContents.debugger;
+    dbg.attach("1.3");
+    await dbg.sendCommand("Emulation.setEmulatedMedia", { media: "print" });
+    const hidden = await c.js(`[".nf-header",".nf-nav",".nf-pages",".nf-toolbar",".nf-status"].filter(s=>{const e=document.querySelector(s);return e&&getComputedStyle(e).display!=="none"})`);
+    c.check("app chrome hidden when printing", hidden.length === 0, hidden.join(","));
+    c.check("title still printed", await c.js(`getComputedStyle(document.querySelector(".nf-title-area")).display!=="none"`));
+    c.check("printed on white with dark text even in dark theme", (await c.js(`(()=>{const e=document.querySelector(".nf-editor");const s=getComputedStyle(e);return s.backgroundColor+"/"+s.color})()`)) === "rgb(255, 255, 255)/rgb(17, 17, 17)",
+      await c.js(`(()=>{const s=getComputedStyle(document.querySelector(".nf-editor"));return s.backgroundColor+"/"+s.color})()`));
+    await dbg.sendCommand("Emulation.setEmulatedMedia", { media: "" });
+    dbg.detach();
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

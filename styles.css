@@ -362,3 +362,28 @@ input,select,button{font-family:inherit}
   display:flex;align-items:center;gap:4px;
   font-size:11px;color:var(--success);opacity:.8;user-select:none;
 }
+
+/* ── Print: just the page title and content, light, full length ──
+   Without this, printing captured the whole app window in the current theme and
+   clipped the note to the editor's on-screen scroll area. */
+@media print{
+  html,body,#root{height:auto;overflow:visible;background:#fff}
+  .nf-root{
+    height:auto;overflow:visible;display:block;background:#fff;color:#111;
+    --bg:#fff !important;--surface:#fff !important;--surface-alt:#f4f4f4 !important;--editor-bg:#fff !important;
+    --text:#111 !important;--text-secondary:#444 !important;--text-muted:#666 !important;
+    --code-bg:#f2f2f2 !important;--border:#ccc !important;--accent:#4f42b5 !important;
+  }
+  .nf-header,.nf-nav,.nf-pages,.nf-toolbar,.nf-find-bar,.nf-status,.nf-timestamps,.nf-ctx,.nf-modal-overlay{display:none !important}
+  .nf-body,.nf-editor-wrap{display:block;overflow:visible;height:auto}
+  .nf-title-area{padding:0 0 8px}
+  .nf-title-input{color:#111;background:none;border:none;padding:0}
+  .nf-editor{
+    overflow:visible !important;height:auto;min-height:0;padding:0;background:#fff;color:#111;
+    font-size:14px !important;white-space:pre-wrap !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  .nf-editor pre{white-space:pre-wrap;overflow:visible}
+  .nf-editor pre,.nf-editor img,.nf-editor tr,.nf-check{break-inside:avoid}
+  ::highlight(nf-find),::highlight(nf-find-current){background-color:transparent;color:inherit}
+}
