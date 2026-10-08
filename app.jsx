@@ -1649,7 +1649,7 @@ function NoteForge(){
       <div className="nf-toolbar">
         <Btn icon="undo" label="Undo" onClick={()=>exec("undo")} s={13}/>
         <Btn icon="redo" label="Redo" onClick={()=>exec("redo")} s={13}/><div className="tb-sep"/>
-        <Sel value={HEADINGS.some(h=>h.v===toolbarFmt.block)?toolbarFmt.block:"div"} opts={HEADINGS.map(h=>({l:h.l,v:h.v}))} onChange={v=>exec("formatBlock",v)} w={60}/>
+        <Sel value={HEADINGS.some(h=>h.v===toolbarFmt.block)?toolbarFmt.block:"div"} opts={HEADINGS.map(h=>({l:h.l,v:h.v}))} onChange={v=>exec("formatBlock",v)} w={80}/>
         <Sel value={FONT_SIZES.some(f=>f.v===toolbarFmt.size)?toolbarFmt.size:"3"} opts={FONT_SIZES.map(f=>({l:f.l+"px",v:f.v}))} onChange={v=>exec("fontSize",v)} w={58}/><div className="tb-sep"/>
         <Btn icon="bold" label="Bold" onClick={()=>exec("bold")} s={13}/>
         <Btn icon="italic" label="Italic" onClick={()=>exec("italic")} s={13}/>

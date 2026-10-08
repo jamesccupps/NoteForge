@@ -3522,7 +3522,7 @@ function NoteForge() {
       v: h.v
     })),
     onChange: v => exec("formatBlock", v),
-    w: 60
+    w: 80
   }), /*#__PURE__*/React.createElement(Sel, {
     value: FONT_SIZES.some(f => f.v === toolbarFmt.size) ? toolbarFmt.size : "3",
     opts: FONT_SIZES.map(f => ({

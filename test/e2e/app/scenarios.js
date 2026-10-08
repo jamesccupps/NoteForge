@@ -752,6 +752,21 @@ SCENARIOS.changePasswordStep1 = {
   },
 };
 
+SCENARIOS.toolbarSelectsFit = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-toolbar select")`);
+    // Text width of the longest option vs the space left after padding and the arrow
+    const fit = await c.js(`[...document.querySelectorAll(".nf-toolbar select")].map(s=>{
+      const cs=getComputedStyle(s);const ctx=document.createElement("canvas").getContext("2d");ctx.font=cs.font;
+      const widest=Math.max(...[...s.options].map(o=>ctx.measureText(o.text).width));
+      const room=s.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight)-16;
+      return {widest:Math.round(widest),room:Math.round(room)}})`);
+    c.check("heading select fits 'Normal'", fit[0].widest <= fit[0].room, JSON.stringify(fit[0]));
+    c.check("size select fits its labels", fit[1].widest <= fit[1].room, JSON.stringify(fit[1]));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"
