@@ -822,6 +822,33 @@ SCENARIOS.newPageInEmptyNotebook = {
   },
 };
 
+SCENARIOS.passwordStrengthLive = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    c.menu("encryption-settings");
+    await c.waitFor(R.button(".nf-overlay-btn", "Enable Encryption"));
+    await c.js(`${R.button(".nf-overlay-btn", "Enable Encryption")}.click()`);
+    await c.waitFor(`document.querySelectorAll(".nf-overlay-input").length>=2`);
+    const fill = async (pw) => {
+      await c.js(R.type(`document.querySelectorAll(".nf-overlay-input")[0]`, pw));
+      await c.js(R.type(`document.querySelectorAll(".nf-overlay-input")[1]`, pw));
+      await c.sleep(500);
+    };
+    const state = () => c.js(`({ready:document.querySelector(".nf-overlay-card").innerText.includes("Ready to encrypt"),
+      disabled:${R.button(".nf-overlay-btn", "Encrypt")}.disabled,
+      text:document.querySelector(".nf-overlay-card").innerText.replace(/\\s+/g," ")})`);
+    await fill("Sunshine2024!");
+    let s = await state();
+    c.check("common word + suffix: shown as not OK before submitting", !s.ready && s.disabled && /common word/.test(s.text), s.text.slice(0, 200));
+    await fill("Correct-Horse-42");
+    // The policy check is debounced and goes over IPC; poll rather than trust a fixed sleep
+    await c.waitFor(`document.querySelector(".nf-overlay-card").innerText.includes("Ready to encrypt")`, 4000).catch(() => {});
+    s = await state();
+    c.check("strong password: ready and enabled", s.ready && !s.disabled, s.text.slice(0, 200));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

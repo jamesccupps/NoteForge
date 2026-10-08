@@ -1183,7 +1183,26 @@ function PasswordDialog({
   const hasDigit = /[0-9]/.test(pw);
   const hasSymbol = /[^A-Za-z0-9]/.test(pw);
   const classes = [hasUpper, hasLower, hasDigit, hasSymbol].filter(Boolean).length;
-  const allMet = hasLen && classes >= 3;
+  // The checklist above only covers length and character classes; main.js also rejects
+  // common passwords and low variety. Ask it as you type, so "Ready" means it will pass.
+  const [policyErr, setPolicyErr] = useState(null);
+  useEffect(() => {
+    if (!showConfirm || !pw || !window.electronAPI?.checkPasswordStrength) {
+      setPolicyErr(null);
+      return;
+    }
+    let live = true;
+    const t = setTimeout(async () => {
+      const r = await window.electronAPI.checkPasswordStrength(pw);
+      if (live) setPolicyErr(r?.error || null);
+    }, 150);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [pw, showConfirm]);
+  const extraErr = hasLen && classes >= 3 ? policyErr : null;
+  const allMet = hasLen && classes >= 3 && !extraErr;
   const Req = ({
     met,
     text
@@ -1296,7 +1315,13 @@ function PasswordDialog({
       fontSize: 11,
       marginTop: 6
     }
-  }, "Passwords don't match"), allMet && pw === pw2 && pw2.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Passwords don't match"), extraErr && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "var(--danger)",
+      fontSize: 11,
+      marginTop: 6
+    }
+  }, extraErr), allMet && pw === pw2 && pw2.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       color: "var(--success)",
       fontSize: 11,

@@ -435,7 +435,17 @@ function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,error,sho
   const hasDigit=/[0-9]/.test(pw);
   const hasSymbol=/[^A-Za-z0-9]/.test(pw);
   const classes=[hasUpper,hasLower,hasDigit,hasSymbol].filter(Boolean).length;
-  const allMet=hasLen&&classes>=3;
+  // The checklist above only covers length and character classes; main.js also rejects
+  // common passwords and low variety. Ask it as you type, so "Ready" means it will pass.
+  const [policyErr,setPolicyErr]=useState(null);
+  useEffect(()=>{
+    if(!showConfirm||!pw||!window.electronAPI?.checkPasswordStrength){setPolicyErr(null);return}
+    let live=true;
+    const t=setTimeout(async()=>{const r=await window.electronAPI.checkPasswordStrength(pw);if(live)setPolicyErr(r?.error||null)},150);
+    return()=>{live=false;clearTimeout(t)};
+  },[pw,showConfirm]);
+  const extraErr=hasLen&&classes>=3?policyErr:null;
+  const allMet=hasLen&&classes>=3&&!extraErr;
 
   const Req=({met,text})=><div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,
     color:met?"var(--success)":"var(--text-muted)",transition:"color .15s"}}>
@@ -469,6 +479,7 @@ function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,error,sho
             )}
           </div>
           {pw2.length>0&&pw!==pw2&&<div style={{color:"var(--danger)",fontSize:11,marginTop:6}}>Passwords don't match</div>}
+          {extraErr&&<div style={{color:"var(--danger)",fontSize:11,marginTop:6}}>{extraErr}</div>}
           {allMet&&pw===pw2&&pw2.length>0&&<div style={{color:"var(--success)",fontSize:11,marginTop:6}}>Ready to encrypt</div>}
         </div>}
         {showHint&&<input className="nf-overlay-input" type="text" placeholder="Password hint (optional, stored unencrypted)"
