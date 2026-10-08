@@ -5,7 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
-## [2.8.1] — 2026-10-08
+## [2.8.2] — 2026-10-08
+
+Re-release of 2.8.1 with the same app code. The 2.8.1 GitHub release lost its installer: electron-builder 26 split it across two releases, and cleaning up the duplicate removed the wrong one.
+
+### Changed
+- The release workflow creates a single draft release up front, lets electron-builder upload into it, and publishes it only if exactly one release exists for the tag. electron-builder 26 can otherwise create two releases for one tag when uploads run concurrently.
+
+## [2.8.1] — 2026-10-08 (release withdrawn; use 2.8.2)
 
 Editor and UI pass: every toolbar button, shortcut, menu and dialog was driven through the real app. Each fix has an end-to-end test that fails on 2.8.0.
 

@@ -30,7 +30,7 @@
 
 Full history is in [CHANGELOG.md](CHANGELOG.md).
 
-**2.8.1 (editor and UI pass):**
+**2.8.2 / 2.8.1 (editor and UI pass):** 2.8.2 republishes 2.8.1, whose release lost its installer.
 - **Now works:** checklist ticks are saved, Find & Replace works, and printing gives just the note.
 - **Editing:** font sizes match their labels, and Tab / Shift+Tab indent lists and move between table cells.
 - **Code blocks, quotes and checklists:** Enter can leave code blocks and quotes, and checklists continue with Enter.
