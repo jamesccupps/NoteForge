@@ -581,6 +581,37 @@ SCENARIOS.searchEntities = {
   },
 };
 
+SCENARIOS.tableTab = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = "<p>above</p>";
+    return d;
+  },
+  async run(c) {
+    const key = async (keyCode, modifiers = []) => {
+      c.win.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
+      c.win.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
+      await c.sleep(150);
+    };
+    const type = async (t) => { for (const ch of t) c.win.webContents.sendInputEvent({ type: "char", keyCode: ch }); await c.sleep(200); };
+    const cells = () => c.js(`[...document.querySelectorAll(".nf-editor td")].map(td=>td.textContent).join("|")`);
+    await c.waitFor(`document.querySelector(".nf-editor p")`);
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const t=ed.querySelector("p").firstChild;getSelection().collapse(t,t.textContent.length)})()`);
+    await realClick(c, `document.querySelector('.nf-toolbar button[title="Table"]')`);
+    await c.js(`(()=>{const td=document.querySelector(".nf-editor td");getSelection().selectAllChildren(td);getSelection().collapseToStart()})()`);
+    await type("A1"); await key("Tab"); await type("B1"); await key("Tab"); await type("C1"); await key("Tab"); await type("A2");
+    c.check("Tab moves to the next cell (and wraps to the next row)", (await cells()) === "A1|B1|C1|A2|||||", await cells());
+    c.check("focus stays in the editor", await c.js(`document.activeElement===document.querySelector(".nf-editor")`));
+    await key("Tab", ["shift"]); await type("!");
+    c.check("Shift+Tab moves back a cell", (await cells()) === "A1|B1|C1!|A2|||||", await cells());
+    await c.js(`(()=>{const tds=document.querySelectorAll(".nf-editor td");getSelection().selectAllChildren(tds[tds.length-1]);getSelection().collapseToEnd()})()`);
+    await key("Tab"); await type("Z");
+    c.check("Tab in the last cell stays in it", (await cells()) === "A1|B1|C1!|A2|||||Z", await cells());
+    const saved = (await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes(">Z<"))).notebooks[0].sections[0].pages[0].content;
+    c.check("cells saved without leading spaces", /<td>A1<\/td>/.test(saved) && !/&nbsp;A1/.test(saved), saved.slice(0, 120));
+  },
+};
+
 const BACKUP_PW = "Backup#Passphrase-2026";
 SCENARIOS.restoreBackup = {
   messageBoxResponse: 0, // "Choose Backup…"

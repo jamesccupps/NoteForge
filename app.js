@@ -1826,6 +1826,18 @@ function NoteForge() {
             document.execCommand(e.shiftKey ? "outdent" : "indent");
             return;
           }
+          // Tab / Shift+Tab in a table moves between cells (caret at the end of the cell's
+          // text) instead of leaving the editor. Selection only, so undo is unaffected.
+          if (node.nodeName === "TD" || node.nodeName === "TH") {
+            e.preventDefault();
+            const cells = [...node.closest("table").querySelectorAll("td,th")];
+            const next = cells[cells.indexOf(node) + (e.shiftKey ? -1 : 1)];
+            if (next) {
+              sel.selectAllChildren(next);
+              sel.collapseToEnd();
+            }
+            return;
+          }
           node = node.parentNode;
         }
       }
@@ -2529,7 +2541,9 @@ function NoteForge() {
   }, [gSearch, data]);
 
   /* ═══ Insert Helpers ═══════════════════════════════════════ */
-  const insertTable = () => exec("insertHTML", '<table><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></table><p><br></p>');
+  const insertTable = () => exec("insertHTML",
+  // <br>, not &nbsp;: typing into an &nbsp; cell left a leading space in front of the text
+  '<table><tr><td><br></td><td><br></td><td><br></td></tr><tr><td><br></td><td><br></td><td><br></td></tr><tr><td><br></td><td><br></td><td><br></td></tr></table><p><br></p>');
   const insertCheck = () => {
     const id = uid();
     exec("insertHTML", `<div class="nf-check"><input type="checkbox" id="${id}"><label for="${id}">To-do item</label></div>`);
