@@ -327,6 +327,82 @@ SCENARIOS.relockActiveNotebook = {
   },
 };
 
+// The protected notebook's pages as they are on disk, decrypted with its password
+function diskNotebookText(c) {
+  const nb = c.readData().notebooks.find((n) => n.id === "nb-l");
+  const o = JSON.parse(nb.encSections);
+  const key = crypto.scryptSync(NB_PW, Buffer.from(o.salt, "hex"), 32, { N: o.N, r: o.r, p: o.p, maxmem: 128 * 1024 * 1024 });
+  const d = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(o.iv, "hex"));
+  d.setAuthTag(Buffer.from(o.tag, "hex"));
+  return d.update(o.data, "base64", "utf-8") + d.final("utf-8");
+}
+const editLocked = (c, text) => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML=${JSON.stringify(`<p>TOPSECRET ${text}</p>`)};ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+
+// Edits in a protected notebook must survive Re-lock Now, Lock and closing the app
+SCENARIOS.relockKeepsEdits = {
+  seed: seedLocked,
+  async run(c) {
+    await c.waitFor(R.nb("Locked"));
+    await unlockNotebook(c, "Locked");
+    await editLocked(c, "edit-one");
+    await c.sleep(1500);
+    c.check("edit reaches the encrypted blob on disk", diskNotebookText(c).includes("edit-one"));
+    await c.js(R.rightClick(R.nb("Locked")));
+    await c.sleep(200);
+    await c.js(`${R.ctxItem("Re-lock Now")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-modal")`);
+    await c.js(`${R.button(".nf-modal-btn", "Re-lock")}.click()`);
+    await c.sleep(1500);
+    c.check("edit still on disk after Re-lock Now", diskNotebookText(c).includes("edit-one"), diskNotebookText(c));
+    await unlockNotebook(c, "Locked");
+    c.check("edit shown after unlocking again", (await c.js(R.editorText)).includes("edit-one"), await c.js(R.editorText));
+  },
+};
+
+SCENARIOS.closeKeepsLockedEdits = {
+  seed: seedLocked,
+  async run(c) {
+    await c.waitFor(R.nb("Locked"));
+    await unlockNotebook(c, "Locked");
+    await editLocked(c, "edit-two");
+    await c.sleep(1500);
+    c.check("edit reaches the encrypted blob on disk", diskNotebookText(c).includes("edit-two"));
+    // Reload runs the beforeunload flush, the same as closing the window
+    c.win.webContents.reload();
+    await c.sleep(1000);
+    c.check("edit still on disk after the close flush", diskNotebookText(c).includes("edit-two"), diskNotebookText(c));
+    await c.waitFor(R.nb("Locked"));
+    await unlockNotebook(c, "Locked");
+    c.check("edit shown after relaunch", (await c.js(R.editorText)).includes("edit-two"), await c.js(R.editorText));
+  },
+};
+
+SCENARIOS.lockAppKeepsLockedEdits = {
+  seed: seedLocked,
+  async run(c) {
+    const MPW = "Master!Passw0rd-e2e";
+    const unlockMaster = async () => {
+      await c.waitFor(`document.querySelector(".nf-overlay-input")`);
+      await c.js(R.type(`document.querySelector(".nf-overlay-input")`, MPW));
+      await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
+      await c.waitFor(R.nb("Locked"));
+    };
+    await c.waitFor(R.nb("Locked"));
+    const r = await c.js(`window.electronAPI.enableEncryption(${JSON.stringify(MPW)},"")`);
+    c.check("enable encryption", r && r.success, JSON.stringify(r));
+    c.win.webContents.reload();
+    await c.sleep(500);
+    await unlockMaster();
+    await unlockNotebook(c, "Locked");
+    await editLocked(c, "edit-three");
+    await c.sleep(1500);
+    c.menu("lock-app");
+    await unlockMaster();
+    await unlockNotebook(c, "Locked");
+    c.check("edit shown after Lock and unlock", (await c.js(R.editorText)).includes("edit-three"), await c.js(R.editorText));
+  },
+};
+
 SCENARIOS.listTabIndent = {
   seed: () => {
     const d = seedBase();

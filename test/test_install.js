@@ -56,8 +56,10 @@ t("verify-and-restore-backup handler present", /ipcMain\.handle\("verify-and-res
 t("About dialog version comes from package.json", /"NoteForge v" \+ app\.getVersion\(\)/.test(main) && !/NoteForge v\d/.test(main));
 
 const appJsx = fs.readFileSync(path.join(root, "app.jsx"), "utf-8");
-t("sanitizeForDiskSync called in persist", appJsx.includes("sanitizeForDiskSync(toSave)"));
-t("sanitizeForDiskSync called in beforeunload", appJsx.includes("sanitizeForDiskSync(dataRef.current)"));
+// Open protected notebooks are sealed in main (writeAppData); see test_crypto for the behaviour
+t("every async save goes through saveNow (one store.set call)", (appJsx.match(/store\.set\(/g) || []).length === 1);
+t("close flush passes the notebook key handles", appJsx.includes("storageSetSync(json,Object.fromEntries(nbKeys.current))"));
+t("main seals before it strips", /sealOpenNotebooks\(value, nbKeyIds\);\s*value = stripLockedSections\(sealed\.value\)/.test(main));
 t("DOMPurify input-type hook installed", appJsx.includes("installDOMPurifyHook"));
 t("Schema version stamped on save", /version:\s*SCHEMA_VERSION/.test(appJsx));
 t("Idle timer tracks mousemove/wheel", /"mousemove".*"wheel"|"wheel".*"mousemove"/.test(appJsx));

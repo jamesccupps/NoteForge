@@ -95,18 +95,23 @@ let sessionKey = null;   // Buffer — can be zeroed
 let sessionSalt = null;  // Buffer — for re-encryptions
 const nbSessionKeys = new Map(); // nbKeyId -> { key: Buffer, salt: Buffer }
 
-function encryptWithSession(plaintext) {
-  if (!sessionKey) throw new Error("No session key");
+// Encrypt under an already-derived key (no scrypt on the save path)
+function sealWithKey(plaintext, key, salt) {
   const iv = crypto.randomBytes(IV_LEN);
-  const cipher = crypto.createCipheriv(ALGO, sessionKey, iv);
+  const cipher = crypto.createCipheriv(ALGO, key, iv);
   let enc = cipher.update(plaintext, "utf-8", "base64");
   enc += cipher.final("base64");
   const tag = cipher.getAuthTag();
   return JSON.stringify({
     v: 2, kdf: "scrypt", N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P,
-    salt: sessionSalt.toString("hex"), iv: iv.toString("hex"),
+    salt: salt.toString("hex"), iv: iv.toString("hex"),
     tag: tag.toString("hex"), data: enc,
   });
+}
+
+function encryptWithSession(plaintext) {
+  if (!sessionKey) throw new Error("No session key");
+  return sealWithKey(plaintext, sessionKey, sessionSalt);
 }
 
 function decryptWithSession(encJson) {
@@ -351,25 +356,54 @@ ipcMain.handle("storage-get", async () => {
 // With encryption on and the session locked there is no key to write with. Falling
 // through to the plaintext branch here used to leave a decrypted copy next to the
 // .enc file whenever a save landed after lock or restore.
-function writeAppData(value) {
-  if (typeof value !== "string") return false;
-  value = stripLockedSections(value);
+// A protected notebook that is open in the renderer arrives with its pages in
+// `sections`, and its encSections blob is only as new as the unlock. Encrypting those
+// pages here, with the notebook's cached key (nbKeyIds: notebook id -> key handle),
+// means every save path stores the newest pages: autosave, Lock, Re-lock and the close
+// flush. The renderer used to do it in autosave only, so the other paths wrote the
+// unlock-time blob back and every edit since the unlock was lost.
+// Returns the new blobs, so the renderer's copy stays current, and the ids it had no
+// key for: stripLockedSections drops their pages, so that save is reported as failed.
+function sealOpenNotebooks(value, nbKeyIds) {
+  const data = JSON.parse(value);
+  const blobs = {}, unsealed = [];
+  if (!Array.isArray(data?.notebooks)) return { value, blobs, unsealed };
+  const keys = nbKeyIds && typeof nbKeyIds === "object" ? nbKeyIds : {};
+  let changed = false;
+  for (const nb of data.notebooks) {
+    if (!nb?.locked || !Array.isArray(nb.sections) || !nb.sections.length) continue;
+    const keyId = Object.prototype.hasOwnProperty.call(keys, nb.id) ? keys[nb.id] : null;
+    const entry = typeof keyId === "string" ? nbSessionKeys.get(keyId) : null;
+    if (!entry) { unsealed.push(nb.id); continue; }
+    nb.encSections = sealWithKey(JSON.stringify(nb.sections), entry.key, entry.salt);
+    nb.sections = [];
+    blobs[nb.id] = nb.encSections;
+    changed = true;
+  }
+  return { value: changed ? JSON.stringify(data) : value, blobs, unsealed };
+}
+
+// Returns { ok, blobs, unsealed } (see sealOpenNotebooks)
+function writeAppData(value, nbKeyIds) {
+  if (typeof value !== "string") return { ok: false };
+  if (!sessionKey && fs.existsSync(encFile)) return { ok: false };
+  const sealed = sealOpenNotebooks(value, nbKeyIds);
+  value = stripLockedSections(sealed.value);
   if (sessionKey) {
     writeFileAtomic(encFile, encryptWithSession(value));
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
-    return true;
+  } else {
+    writeFileAtomic(plainFile, value);
   }
-  if (fs.existsSync(encFile)) return false;
-  writeFileAtomic(plainFile, value);
-  return true;
+  return { ok: true, blobs: sealed.blobs, unsealed: sealed.unsealed };
 }
 
-ipcMain.handle("storage-set", async (_e, value) => {
-  try { return writeAppData(value); } catch (e) { return false; }
+ipcMain.handle("storage-set", async (_e, value, nbKeyIds) => {
+  try { return writeAppData(value, nbKeyIds); } catch (e) { return { ok: false }; }
 });
 
-ipcMain.on("storage-set-sync", (event, value) => {
-  try { event.returnValue = writeAppData(value); } catch (e) { event.returnValue = false; }
+ipcMain.on("storage-set-sync", (event, value, nbKeyIds) => {
+  try { event.returnValue = writeAppData(value, nbKeyIds); } catch (e) { event.returnValue = { ok: false }; }
 });
 
 /* ═══════════════════════════════════════════════════════════════
@@ -511,26 +545,6 @@ ipcMain.handle("decrypt-notebook-sections", async (_e, blob, password) => {
     nbSessionKeys.set(nbKeyId, { key: result.key, salt: result.salt });
     return { success: true, sections: result.plaintext, nbKeyId };
   } catch (e) { recordNbFailure(nbKey); return { error: "Wrong password" }; }
-});
-
-// Re-encrypt using a cached notebook session key (called on every edit save)
-// Password never leaves the main process; derivation happens once per unlock.
-ipcMain.handle("reencrypt-notebook-sections", async (_e, json, nbKeyId) => {
-  const entry = nbSessionKeys.get(nbKeyId);
-  if (!entry) return { error: "Session key expired — please unlock the notebook again" };
-  try {
-    const iv = crypto.randomBytes(IV_LEN);
-    const cipher = crypto.createCipheriv(ALGO, entry.key, iv);
-    let enc = cipher.update(json, "utf-8", "base64");
-    enc += cipher.final("base64");
-    const tag = cipher.getAuthTag();
-    const blob = JSON.stringify({
-      v: 2, kdf: "scrypt", N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P,
-      salt: entry.salt.toString("hex"), iv: iv.toString("hex"),
-      tag: tag.toString("hex"), data: enc,
-    });
-    return { success: true, blob };
-  } catch (e) { return { error: e.message }; }
 });
 
 ipcMain.handle("forget-notebook-key", async (_e, nbKeyId) => {

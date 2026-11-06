@@ -78,11 +78,12 @@ const store={
       return v?{value:v}:null;
     }catch{return null}
   },
-  async set(val){
+  // -> { ok, blobs, unsealed } (main.js writeAppData)
+  async set(val,nbKeyIds){
     try{
-      if(window.electronAPI)return await window.electronAPI.storageSet(val);
-      localStorage.setItem("noteforge-data",val);return true;
-    }catch{return false}
+      if(window.electronAPI)return (await window.electronAPI.storageSet(val,nbKeyIds))||{ok:false};
+      localStorage.setItem("noteforge-data",val);return{ok:true};
+    }catch{return{ok:false}}
   }
 };
 const prefsStore={
@@ -154,10 +155,10 @@ const sanitizeHTML=(html)=>{
     .replace(/javascript\s*:/gi,"removed:");
 };
 
-/* ── CRITICAL: Sanitize data before ANY write to disk ──────────
-   Strips plaintext sections from ALL locked notebooks.
-   This is the mandatory safety net — no conditions, no exceptions.
-   Called by persist() and the beforeunload emergency flush. */
+/* ── Strip plaintext sections from ALL locked notebooks ────────
+   Only for the browser (localStorage) fallback. Under Electron the pages travel to
+   main, which seals open protected notebooks with their keys and strips the rest
+   (writeAppData), so the renderer must not strip them first. */
 function sanitizeForDiskSync(data){
   if(!data?.notebooks)return data;
   return{...data,notebooks:data.notebooks.map(nb=>{
@@ -556,6 +557,24 @@ function NoteForge(){
   const nbKeys=useRef(new Map()); // nbId -> opaque nbKeyId (main-process session key handle)
   const [autoLockMin,setAutoLockMin]=useState(savedPrefs.current.autoLockMin||15);
 
+  /* ── Save ────────────────────────────────────────────────────
+     Every write goes through here: autosave, Lock, Re-lock, the close flush. Open
+     protected notebooks travel with their key handles and main encrypts their pages
+     into encSections before stripping the plaintext (writeAppData), so whichever path
+     saves stores the newest pages. The new blobs come back into memory, so a later
+     Re-lock or unlock starts from them too. */
+  const saveJson=(d)=>JSON.stringify({...(window.electronAPI?d:sanitizeForDiskSync(d)),version:SCHEMA_VERSION});
+  const saveNow=useCallback(async(d)=>{
+    const r=await store.set(saveJson(d),Object.fromEntries(nbKeys.current));
+    const ids=Object.keys(r.blobs||{});
+    if(ids.length&&dataRef.current){
+      const nd={...dataRef.current,notebooks:dataRef.current.notebooks.map(n=>n.locked&&r.blobs[n.id]?{...n,encSections:r.blobs[n.id]}:n)};
+      dataRef.current=nd;setData(nd);
+    }
+    setSaved(true);setSaveFailed(!r.ok||!!r.unsealed?.length);
+    return r;
+  },[]);
+
   // Promise-based confirm/prompt/alert helpers — wrap the modal state so call
   // sites read naturally: `if(await confirm("Delete?")) { ... }`
   const confirm=useCallback((opts)=>new Promise(resolve=>{
@@ -596,8 +615,7 @@ function NoteForge(){
   const lockApp=useCallback(async()=>{
     if(saveTimer.current&&dataRef.current){
       clearTimeout(saveTimer.current);saveTimer.current=null;
-      const sanitized={...sanitizeForDiskSync(dataRef.current),version:SCHEMA_VERSION};
-      await store.set(JSON.stringify(sanitized));
+      await saveNow(dataRef.current);
     }
     if(window.electronAPI?.lockApp)await window.electronAPI.lockApp();
     nbKeys.current.clear();
@@ -634,10 +652,9 @@ function NoteForge(){
     const flush=()=>{
       if(saveTimer.current&&dataRef.current){
         clearTimeout(saveTimer.current);saveTimer.current=null;
-        // CRITICAL: strip plaintext from locked notebooks before ANY write
-        const sanitized={...sanitizeForDiskSync(dataRef.current),version:SCHEMA_VERSION};
-        const json=JSON.stringify(sanitized);
-        if(window.electronAPI?.storageSetSync)window.electronAPI.storageSetSync(json);
+        // Same sealing as saveNow(), synchronously
+        const json=saveJson(dataRef.current);
+        if(window.electronAPI?.storageSetSync)window.electronAPI.storageSetSync(json,Object.fromEntries(nbKeys.current));
         else try{localStorage.setItem("noteforge-data",json)}catch{}
       }
     };
@@ -695,31 +712,13 @@ function NoteForge(){
     dataRef.current=nd; // Update ref IMMEDIATELY — don't wait for React re-render
     setData(nd);setSaved(false);
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    saveTimer.current=setTimeout(async()=>{
-      let toSave=nd;
-      // Step 1: Re-encrypt sections for any locked+unlocked-in-session notebooks
-      // so edits are captured in the encrypted blob before we strip plaintext.
-      // Uses cached main-process session key — no scrypt on the hot path.
-      if(hasElectronCrypto()){
-        const nbs=await Promise.all(nd.notebooks.map(async nb=>{
-          if(nb.locked&&nb.sections?.length>0&&nbKeys.current.has(nb.id)){
-            const nbKeyId=nbKeys.current.get(nb.id);
-            const r=await window.electronAPI.reencryptNotebookSections(JSON.stringify(nb.sections),nbKeyId);
-            if(r.success)return{...nb,encSections:r.blob};
-          }
-          return nb;
-        }));
-        toSave={...nd,notebooks:nbs};
-      }
-      // Step 2: MANDATORY — strip ALL plaintext from locked notebooks before writing
-      // This is the safety net. Even if step 1 failed or was skipped, plaintext never hits disk.
-      toSave=sanitizeForDiskSync(toSave);
-      // Stamp schema version so future releases can migrate safely
-      toSave={...toSave,version:SCHEMA_VERSION};
-      const ok=await store.set(JSON.stringify(toSave));
-      setSaved(true);setSaveFailed(!ok);
+    saveTimer.current=setTimeout(()=>{
+      // Cleared here so Lock and the close flush only write when a save is still
+      // pending (a stale non-null timer made them write after every edit)
+      saveTimer.current=null;
+      if(dataRef.current)saveNow(dataRef.current);
     },500);
-  },[]);
+  },[saveNow]);
   useEffect(()=>()=>{if(saveTimer.current)clearTimeout(saveTimer.current)},[]);
 
   /* ── Derived ─────────────────────────────────────────────── */
@@ -1141,12 +1140,21 @@ function NoteForge(){
       message:"You'll need to re-enter the notebook password to view these pages again.",
       confirmLabel:"Re-lock",
     });
-    if(!ok)return;
+    if(!ok||!dataRef.current)return;
+    // Seal the open pages under the notebook key before forgetting it: the blob in
+    // memory is only as new as the last save
+    if(saveTimer.current){clearTimeout(saveTimer.current);saveTimer.current=null}
+    const r=await saveNow(dataRef.current);
+    if(!r.ok||r.unsealed?.includes(nbId)){
+      alertUser({title:"Couldn't re-lock",message:`Saving "${nb.name}" failed, so it stays unlocked. Try again.`});
+      return;
+    }
     const keyId=nbKeys.current.get(nbId);
     if(keyId&&window.electronAPI?.forgetNotebookKey)await window.electronAPI.forgetNotebookKey(keyId);
     nbKeys.current.delete(nbId);
-    // Strip plaintext sections from in-memory state (encSections is already on disk-authoritative)
-    const nd={...d,notebooks:d.notebooks.map(n=>n.id!==nbId?n:{...n,sections:[]})};
+    // Drop the plaintext pages from memory; encSections now holds them
+    const cur=dataRef.current;
+    const nd={...cur,notebooks:cur.notebooks.map(n=>n.id!==nbId?n:{...n,sections:[]})};
     persist(nd);
     setUnlockedNbs(p=>{const s=new Set(p);s.delete(nbId);return s});
     // Its sections are gone from memory now, so drop a selection that pointed into them
@@ -1162,8 +1170,8 @@ function NoteForge(){
     if(!r.success)return{error:r.error};
     // Store only the opaque handle to the main-process session key. Password is discarded here.
     if(r.nbKeyId)nbKeys.current.set(nbId,r.nbKeyId);
-    // Keep sections in memory (user still has access this session).
-    // sanitizeForDiskSync() strips them before every write — plaintext never reaches disk.
+    // Keep sections in memory (user still has access this session). Each save seals
+    // them into encSections in main and strips them, so plaintext never reaches disk.
     const nd={...d,notebooks:d.notebooks.map(n=>n.id!==nbId?n:{...n,locked:true,encSections:r.blob})};
     persist(nd);
     setUnlockedNbs(p=>{const s=new Set(p);s.add(nbId);return s});

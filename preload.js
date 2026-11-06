@@ -3,8 +3,9 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("electronAPI", {
   // Storage
   storageGet: () => ipcRenderer.invoke("storage-get"),
-  storageSet: (value) => ipcRenderer.invoke("storage-set", value),
-  storageSetSync: (value) => ipcRenderer.sendSync("storage-set-sync", value),
+  // nbKeyIds: { notebookId: key handle } for open protected notebooks, sealed in main
+  storageSet: (value, nbKeyIds) => ipcRenderer.invoke("storage-set", value, nbKeyIds),
+  storageSetSync: (value, nbKeyIds) => ipcRenderer.sendSync("storage-set-sync", value, nbKeyIds),
   // Encryption
   checkEncryption: () => ipcRenderer.invoke("check-encryption"),
   unlockMaster: (pw) => ipcRenderer.invoke("unlock-master", pw),
@@ -18,7 +19,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Notebook encryption
   encryptNotebookSections: (json, pw) => ipcRenderer.invoke("encrypt-notebook-sections", json, pw),
   decryptNotebookSections: (blob, pw) => ipcRenderer.invoke("decrypt-notebook-sections", blob, pw),
-  reencryptNotebookSections: (json, nbKeyId) => ipcRenderer.invoke("reencrypt-notebook-sections", json, nbKeyId),
   forgetNotebookKey: (nbKeyId) => ipcRenderer.invoke("forget-notebook-key", nbKeyId),
   // Backup
   exportBackup: () => ipcRenderer.invoke("export-backup"),

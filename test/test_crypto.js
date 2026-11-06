@@ -140,15 +140,30 @@ const DATA = JSON.stringify({ notebooks: [{ id: "nb1", name: "Test", sections: [
     t("encrypt returns blob + opaque key handle", !!e.blob && /^[0-9a-f]{32}$/.test(e.nbKeyId));
     const d = await h.invoke("decrypt-notebook-sections", e.blob, PW);
     t("decrypt round-trips", d.sections === secs);
-    const re = await h.invoke("reencrypt-notebook-sections", secs + " ", d.nbKeyId);
-    t("reencrypt with cached key round-trips", (await h.invoke("decrypt-notebook-sections", re.blob, PW)).sections === secs + " ");
-    t("reencrypt keeps the notebook salt", JSON.parse(re.blob).salt === JSON.parse(e.blob).salt);
-    t("reencrypt uses fresh IV", JSON.parse(re.blob).iv !== JSON.parse(e.blob).iv);
-    await h.invoke("forget-notebook-key", d.nbKeyId);
-    t("forgotten key handle no longer works", !!(await h.invoke("reencrypt-notebook-sections", secs, d.nbKeyId)).error);
-    await h.invoke("lock-app");
-    t("lock-app drops notebook keys", !!(await h.invoke("reencrypt-notebook-sections", secs, e.nbKeyId)).error);
     t("weak notebook password refused", !!(await h.invoke("encrypt-notebook-sections", secs, "short")).error);
+
+    section("Saves seal open protected notebooks with their cached key");
+    // The renderer sends the open notebook's pages plus its key handle; main encrypts
+    // them into encSections and strips the plaintext.
+    const edited = JSON.stringify([{ id: "s", name: "x", pages: [{ id: "p", content: "EDITED-AFTER-UNLOCK" }] }]);
+    const app = (sections) => JSON.stringify({ notebooks: [{ id: "nb", name: "N", locked: true, encSections: e.blob, sections }] });
+    const r = await h.invoke("storage-set", app(JSON.parse(edited)), { nb: d.nbKeyId });
+    const onDisk = JSON.parse(h.read("noteforge-data.json")).notebooks[0];
+    t("save reports the new blob", r.ok && r.blobs.nb === onDisk.encSections, JSON.stringify(r).slice(0, 200));
+    t("plaintext stripped from disk", onDisk.sections.length === 0 && !h.read("noteforge-data.json").includes("EDITED"));
+    t("blob on disk holds the newest pages", (await h.invoke("decrypt-notebook-sections", onDisk.encSections, PW)).sections === edited);
+    t("sealed blob keeps the notebook salt", JSON.parse(onDisk.encSections).salt === JSON.parse(e.blob).salt);
+    t("sealed blob uses a fresh IV", JSON.parse(onDisk.encSections).iv !== JSON.parse(e.blob).iv);
+    const rs = h.sendSync("storage-set-sync", app(JSON.parse(edited)), { nb: d.nbKeyId });
+    t("the sync (close) path seals too", rs.ok && !!rs.blobs.nb &&
+      (await h.invoke("decrypt-notebook-sections", JSON.parse(h.read("noteforge-data.json")).notebooks[0].encSections, PW)).sections === edited);
+    t("key handle for another id isn't used", (await h.invoke("storage-set", app(JSON.parse(edited)), { other: d.nbKeyId })).unsealed[0] === "nb");
+    await h.invoke("forget-notebook-key", d.nbKeyId);
+    const gone = await h.invoke("storage-set", app(JSON.parse(edited)), { nb: d.nbKeyId });
+    t("forgotten key handle no longer seals (reported unsealed)", gone.unsealed[0] === "nb" && !gone.blobs.nb);
+    t("unsealed pages are still never written in plaintext", !h.read("noteforge-data.json").includes("EDITED"));
+    await h.invoke("lock-app");
+    t("lock-app drops notebook keys", (await h.invoke("storage-set", app(JSON.parse(edited)), { nb: e.nbKeyId })).unsealed[0] === "nb");
     h.cleanup();
   }
 

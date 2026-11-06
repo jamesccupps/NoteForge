@@ -8,7 +8,7 @@ const { JSDOM } = require("jsdom");
 
 const root = path.join(__dirname, "..", "..");
 const START = "let _dompurifyHookInstalled";
-const END = "/* ── CRITICAL: Sanitize data before ANY write";
+const END = "/* ── Strip plaintext sections from ALL locked notebooks";
 
 function loadAppSanitizer() {
   const dom = new JSDOM("<!DOCTYPE html><body></body>", { runScripts: "outside-only" });

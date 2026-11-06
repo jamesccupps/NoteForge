@@ -10,11 +10,11 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
   section("Unencrypted mode");
   {
     const h = loadMain();
-    t("storage-set writes", (await h.invoke("storage-set", DATA)) === true);
+    t("storage-set writes", (await h.invoke("storage-set", DATA)).ok === true);
     t("plaintext file holds data", h.read("noteforge-data.json") === DATA);
     t("storage-get reads it back", (await h.invoke("storage-get")).value === DATA);
-    t("storage-set-sync writes", h.sendSync("storage-set-sync", DATA) === true);
-    t("non-string value refused", (await h.invoke("storage-set", { notebooks: [] })) === false);
+    t("storage-set-sync writes", h.sendSync("storage-set-sync", DATA).ok === true);
+    t("non-string value refused", (await h.invoke("storage-set", { notebooks: [] })).ok === false);
     h.cleanup();
   }
 
@@ -23,7 +23,7 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
     const h = loadMain();
     h.write("noteforge-data.json", DATA);
     await h.invoke("enable-encryption", PW, "");
-    t("storage-set writes", (await h.invoke("storage-set", DATA)) === true);
+    t("storage-set writes", (await h.invoke("storage-set", DATA)).ok === true);
     t("no plaintext file", !h.exists("noteforge-data.json"));
     t("encrypted file does not contain data", !h.read("noteforge-data.enc").includes('"name":"N"'));
     h.cleanup();
@@ -36,13 +36,13 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
     await h.invoke("enable-encryption", PW, "");
     const encBefore = h.read("noteforge-data.enc");
     await h.invoke("lock-app");
-    t("storage-set returns false", (await h.invoke("storage-set", LEAK)) === false);
-    t("storage-set-sync returns false", h.sendSync("storage-set-sync", LEAK) === false);
+    t("storage-set returns false", (await h.invoke("storage-set", LEAK)).ok === false);
+    t("storage-set-sync returns false", h.sendSync("storage-set-sync", LEAK).ok === false);
     t("no plaintext file created", !h.exists("noteforge-data.json"));
     t("encrypted file unchanged", h.read("noteforge-data.enc") === encBefore);
 
     const h2 = h.restart(); // fresh launch, password not yet entered
-    t("after restart, before unlock: storage-set refused", (await h2.invoke("storage-set", LEAK)) === false);
+    t("after restart, before unlock: storage-set refused", (await h2.invoke("storage-set", LEAK)).ok === false);
     t("after restart: still no plaintext file", !h2.exists("noteforge-data.json"));
     h.cleanup();
   }
@@ -53,7 +53,9 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
       `{"id":"n2",${key}:true,"encSections":"blob","sections":[{"id":"s2","pages":[{"content":"SECRET!"}]}]}]}`;
     const warn = console.warn; console.warn = () => {};
     const h = loadMain();
-    t("save with plaintext for a locked notebook succeeds", (await h.invoke("storage-set", leaky())) === true);
+    const lr = await h.invoke("storage-set", leaky());
+    t("save with plaintext for a locked notebook succeeds", lr.ok === true);
+    t("notebook with no key reported as unsealed", JSON.stringify(lr.unsealed) === '["n2"]', JSON.stringify(lr));
     const saved = h.read("noteforge-data.json");
     t("locked sections stripped (unencrypted mode)", !saved.includes("SECRET!"));
     t("unlocked notebook untouched", saved.includes("public"));
@@ -62,8 +64,8 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
     t("storage-set-sync strips too", !h.read("noteforge-data.json").includes("SECRET!"));
     await h.invoke("storage-set", leaky('"\\u006cocked"'));
     t("unicode-escaped key can't bypass", !h.read("noteforge-data.json").includes("SECRET!"));
-    t("clean data written byte-for-byte", (await h.invoke("storage-set", DATA)) === true && h.read("noteforge-data.json") === DATA);
-    t("non-JSON refused", (await h.invoke("storage-set", "not json {")) === false && h.read("noteforge-data.json") === DATA);
+    t("clean data written byte-for-byte", (await h.invoke("storage-set", DATA)).ok === true && h.read("noteforge-data.json") === DATA);
+    t("non-JSON refused", (await h.invoke("storage-set", "not json {")).ok === false && h.read("noteforge-data.json") === DATA);
 
     await h.invoke("enable-encryption", PW, "");
     await h.invoke("storage-set", leaky());
@@ -125,7 +127,7 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
     fs.fsyncSync = () => { throw new Error("simulated power loss"); };
     const r = await h.invoke("storage-set", LEAK);
     fs.fsyncSync = realFsync;
-    t("failed write reports false", r === false);
+    t("failed write reports false", r.ok === false);
     t("previous encrypted file intact after failed write", h.read("noteforge-data.enc") === before);
     t("previous file still decrypts", (await h.restart().invoke("unlock-master", PW)).value === DATA);
     h.cleanup();
@@ -139,7 +141,7 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
     fs.renameSync = () => { const e = new Error("EPERM: operation not permitted, rename"); e.code = "EPERM"; throw e; };
     const r = await h.invoke("storage-set", DATA);
     fs.renameSync = realRename;
-    t("save succeeds when rename is refused", r === true && h.read("noteforge-data.json") === DATA);
+    t("save succeeds when rename is refused", r.ok === true && h.read("noteforge-data.json") === DATA);
     t("temp file cleaned up after fallback", !h.exists("noteforge-data.json.tmp"));
     h.cleanup();
   }
