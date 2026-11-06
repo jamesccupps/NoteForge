@@ -612,15 +612,27 @@ function NoteForge(){
   /* ── Lock / Auto-lock ────────────────────────────────────── */
   const idleTimer=useRef(null);
 
+  // Ends everything tied to the unlocked session, for Lock and Restore. Open dialogs are
+  // answered "cancel": a handler waiting on one held the pre-lock data (plaintext of
+  // the notebooks unlocked then included), and Change Password's held the old password.
+  const dialogsRef=useRef({});dialogsRef.current={confirmDialog,promptDialog,alertDialog};
+  const resetSession=useCallback(()=>{
+    nbKeys.current.clear();
+    setUnlockedNbs(new Set());
+    const {confirmDialog:cd,promptDialog:pd,alertDialog:ad}=dialogsRef.current;
+    cd?.resolve(false);pd?.resolve(null);ad?.resolve?.();
+    setConfirmDialog(null);setPromptDialog(null);setAlertDialog(null);
+    setPwDialog(null);setRestoreFlow(null);setPwError("");
+  },[]);
+
   const lockApp=useCallback(async()=>{
     if(saveTimer.current&&dataRef.current){
       clearTimeout(saveTimer.current);saveTimer.current=null;
       await saveNow(dataRef.current);
     }
     if(window.electronAPI?.lockApp)await window.electronAPI.lockApp();
-    nbKeys.current.clear();
+    resetSession();
     dataRef.current=null;setData(null);setANb(null);setASec(null);setAPg(null);
-    setUnlockedNbs(new Set());
     prevPgRef.current=null; // Force editor to repaint content after unlock even if we land on the same page id
     if(encEnabled)setAppPhase("needsPassword");
   },[encEnabled]);
@@ -1077,7 +1089,7 @@ function NoteForge(){
   const restorePage=(pid)=>updatePage(pid,()=>({deleted:false}));
   const permDelete=async(pid)=>{
     if(!await confirm({title:"Delete Forever",message:"Permanently delete this page? This cannot be undone.",confirmLabel:"Delete Forever",confirmStyle:"danger"}))return;
-    const d=dataRef.current;
+    const d=dataRef.current;if(!d)return;
     persist({...d,notebooks:d.notebooks.map(nb=>({...nb,sections:(nb.sections||[]).map(sec=>({...sec,pages:sec.pages.filter(p=>p.id!==pid)}))}))});
     if(aPg===pid)autoSelectNextPage(pid);
   };
@@ -1093,8 +1105,8 @@ function NoteForge(){
       message:count>0?`Delete section and ${count} page${count>1?"s":""}? This cannot be undone.`:"Delete empty section?",
       confirmLabel:"Delete",confirmStyle:"danger",
     });
-    if(!ok)return;
-    persist({...d,notebooks:d.notebooks.map(nb=>({...nb,sections:(nb.sections||[]).filter(s=>s.id!==sid)}))});
+    const cur=dataRef.current;if(!ok||!cur)return;
+    persist({...cur,notebooks:cur.notebooks.map(nb=>({...nb,sections:(nb.sections||[]).filter(s=>s.id!==sid)}))});
     if(aSec===sid){
       // Auto-select next section in same notebook
       const remaining=(parentNb?.sections||[]).filter(s=>s.id!==sid);
@@ -1110,8 +1122,8 @@ function NoteForge(){
       message:pc>0?`Delete "${nb.name}" and all ${pc} pages? This cannot be undone.`:`Delete "${nb?.name}"?`,
       confirmLabel:"Delete",confirmStyle:"danger",
     });
-    if(!ok)return;
-    persist({...d,notebooks:d.notebooks.filter(n=>n.id!==nid)});
+    const cur=dataRef.current;if(!ok||!cur)return;
+    persist({...cur,notebooks:cur.notebooks.filter(n=>n.id!==nid)});
     const keyId=nbKeys.current.get(nid);
     if(keyId&&window.electronAPI?.forgetNotebookKey)window.electronAPI.forgetNotebookKey(keyId);
     nbKeys.current.delete(nid);
@@ -1128,8 +1140,8 @@ function NoteForge(){
       message:`Permanently delete ${n} page${n>1?"s":""} from trash? This cannot be undone.`,
       confirmLabel:"Empty Trash",confirmStyle:"danger",
     });
-    if(!ok)return;
-    persist({...d,notebooks:d.notebooks.map(nb=>({...nb,sections:(nb.sections||[]).map(sec=>({...sec,pages:sec.pages.filter(p=>!p.deleted)}))}))});
+    const cur=dataRef.current;if(!ok||!cur)return;
+    persist({...cur,notebooks:cur.notebooks.map(nb=>({...nb,sections:(nb.sections||[]).map(sec=>({...sec,pages:sec.pages.filter(p=>!p.deleted)}))}))});
   };
   // Re-lock a notebook in-session — discards in-memory plaintext and the cached session key
   const relockNotebook=async(nbId)=>{
@@ -1204,7 +1216,8 @@ function NoteForge(){
     const nb=dataRef.current?.notebooks.find(n=>n.id===nbId);
     // Until the notebook is unlocked its pages exist only inside encSections, so
     // clearing the blob here would destroy them.
-    if(!nb||!nb.locked||!unlockedNbs.has(nbId))return;
+    // ...and only with a live key: its pages were decrypted in this session
+    if(!nb||!nb.locked||!unlockedNbs.has(nbId)||!nbKeys.current.has(nbId))return;
     const ok=await confirm({
       title:`Remove password from "${nb.name}"?`,
       message:encEnabled
@@ -1212,8 +1225,8 @@ function NoteForge(){
         :"Its pages will no longer need a password and will be saved unencrypted on disk.",
       confirmLabel:"Remove Password",confirmStyle:"danger",
     });
-    if(!ok)return;
     const d=dataRef.current;
+    if(!ok||!d||!nbKeys.current.has(nbId))return;
     const nd={...d,notebooks:d.notebooks.map(n=>n.id!==nbId?n:{...n,locked:false,encSections:null})};
     persist(nd);
     const keyId=nbKeys.current.get(nbId);
@@ -1842,7 +1855,12 @@ function NoteForge(){
         // Show this before switching phase: the unlock screen is an early return, so
         // an alert opened after setAppPhase("needsPassword") never rendered.
         await alertUser({title:"Restore complete",message:"Enter the backup password to unlock your restored data."+(r.rollbackPath?` Your previous notes were saved as ${r.rollbackPath}`:"")});
-        dataRef.current=null;setData(null);setEncEnabled(true);setAppPhase("needsPassword");
+        // The restored file replaced everything: nothing from this session carries over
+        // (a notebook unlocked before it looked unlocked, and empty, after it)
+        if(saveTimer.current){clearTimeout(saveTimer.current);saveTimer.current=null}
+        resetSession();
+        dataRef.current=null;setData(null);setANb(null);setASec(null);setAPg(null);prevPgRef.current=null;
+        setEncEnabled(true);setAppPhase("needsPassword");
       }
     }}/>}
 

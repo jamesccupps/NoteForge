@@ -1504,6 +1504,34 @@ function NoteForge() {
 
   /* ── Lock / Auto-lock ────────────────────────────────────── */
   const idleTimer = useRef(null);
+
+  // Ends everything tied to the unlocked session, for Lock and Restore. Open dialogs are
+  // answered "cancel": a handler waiting on one held the pre-lock data (plaintext of
+  // the notebooks unlocked then included), and Change Password's held the old password.
+  const dialogsRef = useRef({});
+  dialogsRef.current = {
+    confirmDialog,
+    promptDialog,
+    alertDialog
+  };
+  const resetSession = useCallback(() => {
+    nbKeys.current.clear();
+    setUnlockedNbs(new Set());
+    const {
+      confirmDialog: cd,
+      promptDialog: pd,
+      alertDialog: ad
+    } = dialogsRef.current;
+    cd?.resolve(false);
+    pd?.resolve(null);
+    ad?.resolve?.();
+    setConfirmDialog(null);
+    setPromptDialog(null);
+    setAlertDialog(null);
+    setPwDialog(null);
+    setRestoreFlow(null);
+    setPwError("");
+  }, []);
   const lockApp = useCallback(async () => {
     if (saveTimer.current && dataRef.current) {
       clearTimeout(saveTimer.current);
@@ -1511,13 +1539,12 @@ function NoteForge() {
       await saveNow(dataRef.current);
     }
     if (window.electronAPI?.lockApp) await window.electronAPI.lockApp();
-    nbKeys.current.clear();
+    resetSession();
     dataRef.current = null;
     setData(null);
     setANb(null);
     setASec(null);
     setAPg(null);
-    setUnlockedNbs(new Set());
     prevPgRef.current = null; // Force editor to repaint content after unlock even if we land on the same page id
     if (encEnabled) setAppPhase("needsPassword");
   }, [encEnabled]);
@@ -2287,6 +2314,7 @@ function NoteForge() {
       confirmStyle: "danger"
     }))) return;
     const d = dataRef.current;
+    if (!d) return;
     persist({
       ...d,
       notebooks: d.notebooks.map(nb => ({
@@ -2321,10 +2349,11 @@ function NoteForge() {
       confirmLabel: "Delete",
       confirmStyle: "danger"
     });
-    if (!ok) return;
+    const cur = dataRef.current;
+    if (!ok || !cur) return;
     persist({
-      ...d,
-      notebooks: d.notebooks.map(nb => ({
+      ...cur,
+      notebooks: cur.notebooks.map(nb => ({
         ...nb,
         sections: (nb.sections || []).filter(s => s.id !== sid)
       }))
@@ -2352,10 +2381,11 @@ function NoteForge() {
       confirmLabel: "Delete",
       confirmStyle: "danger"
     });
-    if (!ok) return;
+    const cur = dataRef.current;
+    if (!ok || !cur) return;
     persist({
-      ...d,
-      notebooks: d.notebooks.filter(n => n.id !== nid)
+      ...cur,
+      notebooks: cur.notebooks.filter(n => n.id !== nid)
     });
     const keyId = nbKeys.current.get(nid);
     if (keyId && window.electronAPI?.forgetNotebookKey) window.electronAPI.forgetNotebookKey(keyId);
@@ -2385,10 +2415,11 @@ function NoteForge() {
       confirmLabel: "Empty Trash",
       confirmStyle: "danger"
     });
-    if (!ok) return;
+    const cur = dataRef.current;
+    if (!ok || !cur) return;
     persist({
-      ...d,
-      notebooks: d.notebooks.map(nb => ({
+      ...cur,
+      notebooks: cur.notebooks.map(nb => ({
         ...nb,
         sections: (nb.sections || []).map(sec => ({
           ...sec,
@@ -2527,15 +2558,16 @@ function NoteForge() {
     const nb = dataRef.current?.notebooks.find(n => n.id === nbId);
     // Until the notebook is unlocked its pages exist only inside encSections, so
     // clearing the blob here would destroy them.
-    if (!nb || !nb.locked || !unlockedNbs.has(nbId)) return;
+    // ...and only with a live key: its pages were decrypted in this session
+    if (!nb || !nb.locked || !unlockedNbs.has(nbId) || !nbKeys.current.has(nbId)) return;
     const ok = await confirm({
       title: `Remove password from "${nb.name}"?`,
       message: encEnabled ? "Its pages will no longer need the notebook password. They stay encrypted under your master password." : "Its pages will no longer need a password and will be saved unencrypted on disk.",
       confirmLabel: "Remove Password",
       confirmStyle: "danger"
     });
-    if (!ok) return;
     const d = dataRef.current;
+    if (!ok || !d || !nbKeys.current.has(nbId)) return;
     const nd = {
       ...d,
       notebooks: d.notebooks.map(n => n.id !== nbId ? n : {
@@ -4219,8 +4251,19 @@ function NoteForge() {
           title: "Restore complete",
           message: "Enter the backup password to unlock your restored data." + (r.rollbackPath ? ` Your previous notes were saved as ${r.rollbackPath}` : "")
         });
+        // The restored file replaced everything: nothing from this session carries over
+        // (a notebook unlocked before it looked unlocked, and empty, after it)
+        if (saveTimer.current) {
+          clearTimeout(saveTimer.current);
+          saveTimer.current = null;
+        }
+        resetSession();
         dataRef.current = null;
         setData(null);
+        setANb(null);
+        setASec(null);
+        setAPg(null);
+        prevPgRef.current = null;
         setEncEnabled(true);
         setAppPhase("needsPassword");
       }

@@ -167,6 +167,20 @@ const DATA = JSON.stringify({ notebooks: [{ id: "nb1", name: "Test", sections: [
     h.cleanup();
   }
 
+  section("Remove Encryption keeps open protected notebooks saveable");
+  {
+    const h = loadMain();
+    h.write("noteforge-data.json", DATA);
+    await h.invoke("enable-encryption", PW, "");
+    const secs = JSON.stringify([{ id: "s", name: "x", pages: [{ id: "p", content: "AFTER-DISABLE" }] }]);
+    const e = await h.invoke("encrypt-notebook-sections", secs, PW);
+    t("disable-encryption succeeds", (await h.invoke("disable-encryption", PW)).success === true);
+    const r = await h.invoke("storage-set", JSON.stringify({ notebooks: [{ id: "nb", locked: true, encSections: e.blob, sections: JSON.parse(secs) }] }), { nb: e.nbKeyId });
+    t("notebook key survives disable (save seals, nothing unsealed)", r.ok && !r.unsealed.length && !!r.blobs.nb, JSON.stringify(r).slice(0, 200));
+    t("pages saved in the notebook blob", (await h.invoke("decrypt-notebook-sections", r.blobs.nb, PW)).sections === secs);
+    h.cleanup();
+  }
+
   section("Rate limiting");
   {
     const h = loadMain();

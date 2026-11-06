@@ -124,9 +124,13 @@ function decryptWithSession(encJson) {
   return dec;
 }
 
-function lockSession() {
+function clearMasterKey() {
   if (sessionKey) { sessionKey.fill(0); sessionKey = null; }
   sessionSalt = null;
+}
+
+function lockSession() {
+  clearMasterKey();
   // Zero all per-notebook session keys
   for (const entry of nbSessionKeys.values()) entry.key.fill(0);
   nbSessionKeys.clear();
@@ -469,7 +473,9 @@ ipcMain.handle("disable-encryption", async (_e, password) => {
     writeFileAtomic(plainFile, sanitizeDataJson(result.plaintext));
     fs.unlinkSync(encFile);
     if (fs.existsSync(hintFile)) fs.unlinkSync(hintFile);
-    lockSession();
+    // Only the master key: protected notebooks open in the renderer stay open, and
+    // their next saves need their keys (dropping them lost their edits)
+    clearMasterKey();
     recordMasterSuccess();
     return { success: true };
   } catch (e) { recordMasterFailure(); return { error: "Wrong password" }; }

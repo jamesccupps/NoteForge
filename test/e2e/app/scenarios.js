@@ -963,4 +963,72 @@ SCENARIOS.restoreBackup = {
   },
 };
 
+// Restoring your own backup while a protected notebook is unlocked: every id matches,
+// so session state left over from before the restore made it look unlocked and empty.
+SCENARIOS.restoreResetsUnlockedNotebooks = {
+  messageBoxResponse: 0,
+  seed: seedLocked,
+  openDialog: (tmp) => {
+    const file = require("path").join(tmp, "own-backup.enc");
+    require("fs").writeFileSync(file, encryptBlob(JSON.stringify(seedLocked()), BACKUP_PW));
+    return { canceled: false, filePaths: [file] };
+  },
+  async run(c) {
+    await c.waitFor(R.nb("Locked"));
+    await unlockNotebook(c, "Locked");
+    c.menu("restore-backup");
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Verify Backup Password"`);
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
+    await c.js(`${R.button(".nf-overlay-btn", "Restore Backup")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-modal h3")?.textContent==="Restore complete"`);
+    await c.js(`${R.button(".nf-modal-btn", "OK")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Unlock NoteForge"`);
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
+    await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
+    await c.waitFor(R.nb("Locked"));
+    await c.js(R.rightClick(R.nb("Locked")));
+    await c.sleep(200);
+    const items = await c.js(`[...document.querySelectorAll(".nf-ctx-item")].map(e=>e.textContent.trim())`);
+    c.check("restored protected notebook offers no Remove Password", !items.some((t) => t.includes("Remove Password")), items.join(", "));
+    await c.js(`document.body.click()`);
+    await c.sleep(200);
+    await c.js(`${R.nb("Locked")}.click()`);
+    await c.sleep(400);
+    c.check("restored protected notebook asks for its password", await c.js(`!!document.querySelector(".nf-overlay-input")`));
+  },
+};
+
+// A dialog left open when the app locks must not act after the unlock: it held the
+// pre-lock data, plaintext of the notebooks unlocked then included.
+SCENARIOS.lockClosesDialogs = {
+  seed: seedLocked,
+  async run(c) {
+    const MPW = "Master!Passw0rd-e2e";
+    const unlockMaster = async () => {
+      await c.waitFor(`document.querySelector(".nf-overlay-input")`);
+      await c.js(R.type(`document.querySelector(".nf-overlay-input")`, MPW));
+      await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
+      await c.waitFor(R.nb("Locked"));
+    };
+    await c.waitFor(R.nb("Locked"));
+    await c.js(`window.electronAPI.enableEncryption(${JSON.stringify(MPW)},"")`);
+    c.win.webContents.reload();
+    await c.sleep(500);
+    await unlockMaster();
+    await unlockNotebook(c, "Locked");
+    const sec = `[...document.querySelectorAll(".nf-sec")].find(e=>e.textContent.includes("Secret"))`;
+    await c.js(R.rightClick(sec));
+    await c.sleep(200);
+    await c.js(`${R.ctxItem("Delete Section")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-modal")`);
+    c.menu("lock-app");
+    await unlockMaster();
+    await c.sleep(300);
+    c.check("no dialog left open after the unlock", !(await c.js(`!!document.querySelector(".nf-modal")`)));
+    c.check("protected notebook's pages not shown without its password", !(await c.js(`document.body.innerText.includes("Secret")`)));
+    await unlockNotebook(c, "Locked");
+    c.check("section still there", await c.js(`!!${sec}`));
+  },
+};
+
 module.exports = { SCENARIOS, R, NB_PW, seedBase, seedLocked, unlockNotebook };
