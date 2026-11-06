@@ -19,6 +19,12 @@ const hintFile = path.join(userDataPath, "noteforge-hint.txt");
 const rlFile = path.join(userDataPath, "ratelimit.json");
 const IS_DEV = !app.isPackaged;
 
+// One instance per data folder (the lock lives in userData). Two windows each rewrote
+// the whole vault from their own memory: the last save won, and a password change in
+// one was undone by the other's next save. A second launch focuses the first window.
+const isFirstInstance = app.requestSingleInstanceLock();
+if (!isFirstInstance) app.quit();
+
 /* ═══════════════════════════════════════════════════════════════
    CRYPTO — AES-256-GCM + scrypt
    ═══════════════════════════════════════════════════════════════ */
@@ -838,7 +844,15 @@ function createWindow() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
 }
 
+app.on("second-instance", () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+});
+
 app.whenReady().then(() => {
+  if (!isFirstInstance) return;
   // Windows: set AppUserModelID so the taskbar groups the window under NoteForge
   // with the correct icon instead of under generic "Electron"
   if (process.platform === "win32") app.setAppUserModelId("com.jamescupps.noteforge");

@@ -27,6 +27,8 @@ function loadMain({ userData } = {}) {
       getPath: () => userData,
       getVersion: () => pkg.version,
       isPackaged: false,
+      requestSingleInstanceLock: () => true,
+      quit() {},
       whenReady: () => new Promise(() => {}), // never creates a window under test
       on() {},
       setAppUserModelId() {},

@@ -21,8 +21,9 @@ if (!scenario) { finish({ fatal: `unknown scenario ${process.env.NF_SCENARIO}` }
 
 // Never touch the user's real data: redirect userData before main.js reads it, and
 // refuse to continue if that didn't take.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nf-e2e-"));
-out.tmp = tmp; // run.js deletes it once Electron has exited and released its locks
+// NF_USERDATA: a second instance started by a scenario on that scenario's own folder
+const tmp = process.env.NF_USERDATA || fs.mkdtempSync(path.join(os.tmpdir(), "nf-e2e-"));
+if (!process.env.NF_USERDATA) out.tmp = tmp; // run.js deletes it once Electron has exited and released its locks
 app.setPath("userData", tmp);
 if (app.getPath("userData") !== tmp) { finish({ fatal: "userData redirect failed" }); return; }
 setTimeout(() => finish({ fatal: "scenario timed out" }), 60000).unref();

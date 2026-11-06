@@ -1031,4 +1031,35 @@ SCENARIOS.lockClosesDialogs = {
   },
 };
 
+// Two windows on one data folder each rewrite the whole vault from their own memory.
+// Starts a second app process on this scenario's folder: it must quit without a window
+// and hand over to the first.
+SCENARIOS.singleInstance = {
+  seed: seedBase,
+  async run(c) {
+    const { spawn } = require("child_process");
+    const fs = require("fs"), path = require("path");
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const { app } = require("electron");
+    let handedOver = false;
+    app.once("second-instance", () => { handedOver = true; });
+    const result = path.join(c.tmp, "second-instance-result.json");
+    const proc = spawn(process.execPath, [__dirname], {
+      env: { ...process.env, NF_SCENARIO: "secondInstanceProbe", NF_USERDATA: c.tmp, NF_RESULT: result },
+      stdio: "ignore",
+    });
+    const exited = await new Promise((resolve) => {
+      const t = setTimeout(() => { proc.kill(); resolve(false); }, 20000);
+      proc.on("exit", () => { clearTimeout(t); resolve(true); });
+    });
+    c.check("second instance exits on its own", exited);
+    c.check("second instance never opened a window", !fs.existsSync(result),
+      fs.existsSync(result) ? fs.readFileSync(result, "utf-8").slice(0, 200) : "");
+    c.check("first instance is told (and focuses its window)", handedOver);
+  },
+};
+SCENARIOS.secondInstanceProbe = {
+  async run(c) { c.check("second instance opened a window", true); },
+};
+
 module.exports = { SCENARIOS, R, NB_PW, seedBase, seedLocked, unlockNotebook };
