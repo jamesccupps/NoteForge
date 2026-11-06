@@ -1028,6 +1028,26 @@ SCENARIOS.noteCantSpoofApp = {
   },
 };
 
+// Dropping content from another program goes through the paste path: plain text, or
+// sanitized HTML. Chromium's own drop insert keeps forms and inputs.
+SCENARIOS.dropUsesPastePath = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    const drop = (html, text) => c.js(`(()=>{const ed=document.querySelector(".nf-editor");const p=ed.querySelector("p").getBoundingClientRect();
+      const dt=new DataTransfer();if(${JSON.stringify(html)})dt.setData("text/html",${JSON.stringify(html)});if(${JSON.stringify(text)})dt.setData("text/plain",${JSON.stringify(text)});
+      const ev=new DragEvent("drop",{dataTransfer:dt,bubbles:true,cancelable:true,clientX:p.right-2,clientY:p.top+p.height/2});
+      ed.dispatchEvent(ev);return ev.defaultPrevented})()`);
+    c.check("drop handled by the app", await drop('<form><input type="password"></form><b>dropped</b>', "dropped text"));
+    await c.sleep(300);
+    c.check("plain text inserted", (await c.js(R.editorText)).includes("dropped text"), await c.js(R.editorText));
+    await drop('<p>html only <input type="password"><span class="nf-overlay">x</span></p>', "");
+    await c.sleep(300);
+    const html = await c.js(`document.querySelector(".nf-editor").innerHTML`);
+    c.check("HTML-only drop is sanitized", html.includes("html only") && !/<input|<form|nf-overlay/.test(html), html);
+  },
+};
+
 // CSP: a <base> element must not re-point relative URLs (base-uri 'none'), and forms
 // can't submit anywhere (form-action 'none')
 SCENARIOS.cspBaseAndForms = {

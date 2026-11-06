@@ -888,12 +888,12 @@ function NoteForge(){
   },[onInput]);
 
   /* ── Paste ───────────────────────────────────────────────── */
-  const onPaste=useCallback(e=>{
-    const cd=e.clipboardData;if(!cd)return;
+  // Paste and drop both come through here (dt: the clipboard or the drag's data)
+  const insertTransfer=useCallback(dt=>{
     // Check for images first
-    for(const item of cd.items){
+    for(const item of dt.items){
       if(item.type.startsWith("image/")){
-        e.preventDefault();const file=item.getAsFile();
+        const file=item.getAsFile();
         if(!file)return;
         // Auto-downscale large images so the encrypted data file stays lean.
         // 5 MB hard cap to avoid canvas/memory pathologies.
@@ -908,15 +908,30 @@ function NoteForge(){
         return;
       }
     }
-    // Always prevent default — never let the browser insert raw clipboard HTML
-    e.preventDefault();
     // Prefer plain text (strips all formatting — clean paste like OneNote)
-    const text=cd.getData("text/plain");
+    const text=dt.getData("text/plain");
     if(text){document.execCommand("insertText",false,text);return}
     // Fallback: if only HTML is available (rare), sanitize it
-    const html=cd.getData("text/html");
+    const html=dt.getData("text/html");
     if(html){const clean=sanitizeHTML(html);if(clean)document.execCommand("insertHTML",false,clean)}
   },[exec,alertUser]);
+  // Always prevent default — never let the browser insert raw clipboard HTML
+  const onPaste=useCallback(e=>{
+    if(!e.clipboardData)return;
+    e.preventDefault();insertTransfer(e.clipboardData);
+  },[insertTransfer]);
+  // Drops from other programs take the paste path: Chromium's own drop insert keeps
+  // forms and inputs, and DOMPurify only ran on the next load. Moving text within the
+  // note (a drag that started in the editor) stays the browser's own move.
+  const dragInEditor=useRef(false);
+  const onDrop=useCallback(e=>{
+    if(dragInEditor.current||!e.dataTransfer)return;
+    e.preventDefault();
+    edRef.current?.focus();
+    const r=document.caretRangeFromPoint?.(e.clientX,e.clientY);
+    if(r&&edRef.current?.contains(r.startContainer)){const s=window.getSelection();s.removeAllRanges();s.addRange(r)}
+    insertTransfer(e.dataTransfer);
+  },[insertTransfer]);
   const onKeyDown=useCallback(e=>{
     // Enter on an empty last line leaves a code block or quote. Before, Enter only ever
     // added lines inside them, so a note ending in a code block couldn't continue below it.
@@ -1841,7 +1856,8 @@ function NoteForge(){
         <div className="nf-timestamps"><span>Created {new Date(curPage.created).toLocaleString()}</span><span>Modified {new Date(curPage.modified).toLocaleString()}</span></div>
       </div>
       <div ref={attachEditor} className="nf-editor" contentEditable suppressContentEditableWarning
-        onInput={onInput} onPaste={onPaste} onKeyDown={onKeyDown}
+        onInput={onInput} onPaste={onPaste} onKeyDown={onKeyDown} onDrop={onDrop}
+        onDragStart={()=>{dragInEditor.current=true}} onDragEnd={()=>{dragInEditor.current=false}}
         onClick={e=>{
           // A ticked checkbox only changes its .checked property, which innerHTML doesn't
           // include, so checklist state was never saved. Mirror it into the attribute.
