@@ -96,6 +96,29 @@ t("CSP present", csp.length > 0);
 // including file://host/share (UNC).
 t("CSP img-src is data: only", (csp.match(/img-src([^;]*)/) || [])[1]?.trim() === "data:", csp);
 
+console.log("\n=== Notes can't dress up as the app ===");
+// A note shown in the editor must stay inside it: the app's own classes (nf-overlay is a
+// full-window fixed overlay) or fixed positioning could draw a fake lock screen over
+// everything, with a text box in place of a password field.
+const spoof = sanitizeHTML('<div class="nf-overlay"><div class="nf-overlay-card">Session expired</div></div>');
+t("app classes stripped (nf-overlay)", !/class=/.test(spoof), spoof);
+t("checklist class kept (nf-check)", /class="nf-check"/.test(sanitizeHTML('<div class="nf-check"><input type="checkbox" id="a"><label for="a">x</label></div>')));
+const fixed = sanitizeHTML('<div style="position:fixed; inset:0; z-index:9999; color:red; transform:scale(9)">x</div>');
+t("position/inset/z-index/transform removed", !/position|inset|z-index|transform/i.test(fixed), fixed);
+t("...other styles kept", /color:\s*red/.test(fixed), fixed);
+t("highlight / alignment styles kept", /background-color/.test(sanitizeHTML('<span style="background-color: rgb(255, 235, 59);">x</span>')) &&
+  /text-align:\s*center/.test(sanitizeHTML('<p style="text-align: center;">x</p>')));
+for (const inp of ['<input type="password">', '<input>', '<input type="text" value="x">', '<input type="hidden">']) {
+  const c = sanitizeHTML(`<p>a${inp}b</p>`);
+  t(`${inp} removed outright (not left as a text box)`, !/<input/i.test(c), c);
+}
+t("checkbox kept", /<input type="checkbox"/.test(sanitizeHTML('<input type="checkbox" checked>')));
+for (const [href, keep] of [["https://example.com/", true], ["http://example.com/", true], ["mailto:a@example.com", true],
+  ["file:///C:/Windows/win.ini", false], ["//host/share", false], ["ftp://example.com/", false], ["x.html", false]]) {
+  const c = sanitizeHTML(`<a href="${href}">l</a>`);
+  t(`link href "${href}" ${keep ? "kept" : "removed"}`, /href=/.test(c) === keep, c);
+}
+
 console.log("\n=== Summary ===");
 console.log(`  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

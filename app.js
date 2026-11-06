@@ -223,12 +223,38 @@ function decodeEntities(s) {
    paste can't inject <input type="password"> for in-note phishing, and restrict
    <img src> to data: URIs. */
 let _dompurifyHookInstalled = false;
+// A note must stay inside the editor. The app's own classes (nf-overlay is a fixed,
+// full-window overlay) or fixed positioning let one draw a fake lock screen over the
+// whole app. Only the checklist class is kept, and the style properties that take
+// content out of the editor's box are dropped. (Not an allowlist of properties: Chromium
+// writes a wide range of computed typography into style attributes when editing, and an
+// allowlist would strip formatting from existing notes.)
+const NOTE_CLASSES = new Set(["nf-check"]);
+const OUT_OF_BOX_STYLE = /^(position|inset(-.*)?|top|right|bottom|left|z-index|transform|translate|rotate|scale)$/i;
 function installDOMPurifyHook() {
   if (_dompurifyHookInstalled || !window.DOMPurify) return;
+  // Inputs: to-do checkboxes only. Dropping just the type left the rest as text boxes,
+  // so <input type=password> still drew a password-looking field.
+  window.DOMPurify.addHook("uponSanitizeElement", (node, data) => {
+    if (data.tagName === "input" && String(node.getAttribute("type") || "").trim().toLowerCase() !== "checkbox") node.parentNode?.removeChild(node);
+  });
   window.DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
-    if (node.nodeName === "INPUT" && data.attrName === "type") {
-      if (String(data.attrValue).toLowerCase() !== "checkbox") data.keepAttr = false;
+    if (data.attrName === "class") {
+      const keep = String(data.attrValue).split(/\s+/).filter(c => NOTE_CLASSES.has(c));
+      if (keep.length) data.attrValue = keep.join(" ");else data.keepAttr = false;
     }
+    if (data.attrName === "style" && /position|inset|top|right|bottom|left|z-index|transform|translate|rotate|scale/i.test(data.attrValue)) {
+      const st = window.document.createElement("span").style;
+      st.cssText = String(data.attrValue);
+      for (let i = st.length - 1; i >= 0; i--) {
+        const p = st.item(i);
+        if (OUT_OF_BOX_STYLE.test(p)) st.removeProperty(p);
+      }
+      if (st.cssText) data.attrValue = st.cssText;else data.keepAttr = false;
+    }
+    // Links: web and email only (links can't be opened in the app; no file: or relative
+    // paths that resolve against the app's own folder)
+    if (node.nodeName === "A" && data.attrName === "href" && !/^(https?|mailto):/i.test(String(data.attrValue).trim())) data.keepAttr = false;
     // Images load the moment a note is shown. Only inline data: images are allowed:
     // on file:// a protocol-relative src like //host/share/x.png resolves to a UNC
     // path, and Windows opens an SMB session to that host (leaking an NTLM hash).

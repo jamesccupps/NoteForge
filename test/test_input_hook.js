@@ -1,5 +1,6 @@
-// The DOMPurify hook in app.jsx must strip every <input> type except checkbox, so pasted
-// or restored content can't render a fake password prompt inside a note.
+// The DOMPurify hook in app.jsx must remove every <input> except a checkbox, so pasted
+// or restored content can't render a fake password prompt inside a note. (Stripping only
+// the type, as before 2.9, left a text box behind.)
 const { loadAppSanitizer } = require("./helpers/sanitizer");
 const { sanitizeHTML } = loadAppSanitizer();
 
@@ -22,7 +23,7 @@ const t = (name, ok, detail) => { if (ok) { console.log(`  ✓ ${name}`); pass++
 
 for (const [html, label] of stripped) {
   const clean = sanitizeHTML(html);
-  t(`${label}: type stripped`, !/type\s*=/i.test(clean), clean);
+  t(`${label}: input removed`, !/<input/i.test(clean), clean);
 }
 for (const [html, label] of kept) {
   const clean = sanitizeHTML(html);

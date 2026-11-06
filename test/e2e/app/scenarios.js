@@ -1003,6 +1003,31 @@ SCENARIOS.restoreBackup = {
   },
 };
 
+// A stored note dressed as the app (its overlay class, fixed positioning, a password box)
+// is shown as plain content inside the editor
+SCENARIOS.noteCantSpoofApp = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = '<p>alpha body</p><div class="nf-overlay" style="position:fixed;inset:0;z-index:99999;color:red">' +
+      '<div class="nf-overlay-card">Session expired <input type="password" placeholder="Master password"></div></div>' +
+      '<div class="nf-check"><input type="checkbox" id="c1" checked><label for="c1">todo</label></div><p style="text-align:center">mid</p>';
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    const r = await c.js(`(()=>{const ed=document.querySelector(".nf-editor");return{
+      overlay:!!ed.querySelector(".nf-overlay,.nf-overlay-card"),
+      fixed:[...ed.querySelectorAll("*")].some(e=>getComputedStyle(e).position==="fixed"),
+      inputs:[...ed.querySelectorAll("input")].map(i=>i.type).join(","),
+      red:[...ed.querySelectorAll("div")].some(e=>getComputedStyle(e).color==="rgb(255, 0, 0)"),
+      center:getComputedStyle([...ed.querySelectorAll("p")].find(p=>p.textContent==="mid")).textAlign}})()`);
+    c.check("no app overlay class in the note", !r.overlay, JSON.stringify(r));
+    c.check("nothing in the note is position:fixed", !r.fixed, JSON.stringify(r));
+    c.check("only the checkbox input is left", r.inputs === "checkbox", r.inputs);
+    c.check("harmless styles still apply (color, alignment)", r.red && r.center === "center", JSON.stringify(r));
+  },
+};
+
 // CSP: a <base> element must not re-point relative URLs (base-uri 'none'), and forms
 // can't submit anywhere (form-action 'none')
 SCENARIOS.cspBaseAndForms = {
