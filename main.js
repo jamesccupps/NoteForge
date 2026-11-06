@@ -11,6 +11,12 @@ try { autoUpdater = require("electron-updater").autoUpdater; }
 catch (e) { autoUpdaterLoadError = e.message; console.error("[NoteForge] electron-updater unavailable:", e.message); }
 
 let mainWindow;
+// The portable build keeps everything in "NoteForge Data" beside its exe, so notes, the
+// hint and the browser profile leave with the USB stick instead of staying in this PC's
+// %APPDATA%, and it no longer shares one vault with an installed copy.
+const IS_PORTABLE = !!process.env.PORTABLE_EXECUTABLE_DIR;
+const pcUserDataPath = app.getPath("userData"); // where an installed NoteForge keeps its data
+if (IS_PORTABLE) app.setPath("userData", path.join(process.env.PORTABLE_EXECUTABLE_DIR, "NoteForge Data"));
 const userDataPath = app.getPath("userData");
 const plainFile = path.join(userDataPath, "noteforge-data.json");
 const encFile = path.join(userDataPath, "noteforge-data.enc");
@@ -914,8 +920,38 @@ app.on("second-instance", () => {
   mainWindow.focus();
 });
 
-app.whenReady().then(() => {
+// Portable builds before 2.9 kept their notes in this PC's profile folder. On the first
+// run with none beside the exe but some there, offer once to copy them. A copy, not a
+// move: an installed NoteForge on this PC uses that folder too.
+async function offerPortableCopy() {
+  if (!IS_PORTABLE || pcUserDataPath === userDataPath) return;
+  const hasNotes = (dir) => ["noteforge-data.enc", "noteforge-data.json"].some((f) => fs.existsSync(path.join(dir, f)));
+  if (loadConfig().portableCopyOffered || hasNotes(userDataPath) || !hasNotes(pcUserDataPath)) return;
+  const r = await dialog.showMessageBox({
+    type: "question", title: "NoteForge Portable",
+    message: "Copy the notes from this PC?",
+    detail: "The portable version now keeps its notes in the \"NoteForge Data\" folder next to it. " +
+      "NoteForge notes were found on this PC, in " + pcUserDataPath + ". Copy them there?\n\n" +
+      "They also stay on this PC; delete them from that folder if you don't want them left behind.",
+    buttons: ["Copy Them Here", "Start Empty"], defaultId: 0, cancelId: 1,
+  });
+  try {
+    fs.mkdirSync(userDataPath, { recursive: true });
+    if (r.response === 0) {
+      for (const f of ["noteforge-data.enc", "noteforge-data.json", "noteforge-hint.txt"]) {
+        const src = path.join(pcUserDataPath, f);
+        if (fs.existsSync(src)) fs.copyFileSync(src, path.join(userDataPath, f));
+      }
+    }
+    saveConfig({ ...loadConfig(), portableCopyOffered: true });
+  } catch (e) {
+    dialog.showErrorBox("NoteForge Portable", "Couldn't copy the notes: " + e.message);
+  }
+}
+
+app.whenReady().then(async () => {
   if (!isFirstInstance) return;
+  await offerPortableCopy();
   // Windows: set AppUserModelID so the taskbar groups the window under NoteForge
   // with the correct icon instead of under generic "Electron"
   if (process.platform === "win32") app.setAppUserModelId("com.jamescupps.noteforge");
@@ -963,6 +999,9 @@ if (autoUpdater) {
 // Cached for About dialog / troubleshooting
 let lastUpdateError = null;
 
+// A fixed address, opened from main only (the renderer can't open URLs)
+const RELEASES_URL = "https://github.com/jamesccupps/NoteForge/releases/latest";
+
 function setupAutoUpdater() {
   if (IS_DEV) return;
   if (!autoUpdater) {
@@ -982,6 +1021,17 @@ function setupAutoUpdater() {
 
   autoUpdater.on("update-available", (info) => {
     if (!mainWindow) return;
+    // electron-updater would run the installer, which sets up a separate installed copy
+    // that doesn't see the notes beside the portable exe: point to the download instead
+    if (IS_PORTABLE) {
+      dialog.showMessageBox(mainWindow, {
+        type: "info", title: "Update Available",
+        message: `NoteForge ${info.version} is available.`,
+        detail: `Download NoteForge-${info.version}-portable.exe and put it in place of this one, in the same folder, so it finds your "NoteForge Data" folder.`,
+        buttons: ["Open Download Page", "Later"], defaultId: 0, cancelId: 1,
+      }).then((r) => { if (r.response === 0) shell.openExternal(RELEASES_URL); });
+      return;
+    }
     dialog.showMessageBox(mainWindow, {
       type: "info",
       title: "Update Available",

@@ -1139,6 +1139,58 @@ SCENARIOS.failedSaveIsRetried = {
   },
 };
 
+// The portable build keeps its data beside the exe, not in this PC's profile folder.
+// Runs the app twice as the portable build (PORTABLE_EXECUTABLE_DIR set, as the
+// portable launcher does), with this scenario's folder as the PC's profile folder.
+SCENARIOS.portableDataBesideExe = {
+  seed: seedBase,
+  async run(c) {
+    const { spawn } = require("child_process");
+    const fs = require("fs"), path = require("path");
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const usb = path.join(c.tmp, "usb");
+    fs.mkdirSync(usb);
+    const before = fs.readFileSync(c.file("noteforge-data.json"), "utf-8");
+    const runPortable = async (scenario) => {
+      const result = path.join(c.tmp, scenario + "-result.json");
+      const proc = spawn(process.execPath, [__dirname], {
+        env: { ...process.env, NF_SCENARIO: scenario, NF_USERDATA: c.tmp, NF_RESULT: result, PORTABLE_EXECUTABLE_DIR: usb },
+        stdio: "ignore",
+      });
+      await new Promise((resolve) => { const t = setTimeout(() => { proc.kill(); resolve(); }, 45000); proc.on("exit", () => { clearTimeout(t); resolve(); }); });
+      if (!fs.existsSync(result)) { c.check(`${scenario} ran`, false); return; }
+      const out = JSON.parse(fs.readFileSync(result, "utf-8"));
+      for (const k of out.checks) c.check(k.name, k.ok, k.detail);
+      if (out.error || out.fatal) c.check(`${scenario}: ${out.error || out.fatal}`, false);
+    };
+    await runPortable("portableFirstRun");
+    await runPortable("portableSecondRun");
+    c.check("this PC's own notes left as they were", fs.readFileSync(c.file("noteforge-data.json"), "utf-8") === before);
+    c.check("portable notes are beside the exe", fs.existsSync(path.join(usb, "NoteForge Data", "noteforge-data.json")));
+  },
+};
+SCENARIOS.portableFirstRun = {
+  helper: true, // started by portableDataBesideExe only
+  messageBoxResponse: 0, // "Copy Them Here"
+  async run(c) {
+    const path = require("path");
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    c.check("portable: data folder beside the exe", require("electron").app.getPath("userData") === path.join(process.env.PORTABLE_EXECUTABLE_DIR, "NoteForge Data"));
+    c.check("portable: offered to copy this PC's notes", c.dialogs.includes("NoteForge Portable"), c.dialogs.join(", "));
+    c.check("portable: copied notes open", true);
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML="<p>portable edit</p>";ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+    await c.sleep(1200);
+  },
+};
+SCENARIOS.portableSecondRun = {
+  helper: true,
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("portable edit")`);
+    c.check("portable: its own edits on the next run", true);
+    c.check("portable: asked only once", !c.dialogs.includes("NoteForge Portable"), c.dialogs.join(", "));
+  },
+};
+
 // Two windows on one data folder each rewrite the whole vault from their own memory.
 // Starts a second app process on this scenario's folder: it must quit without a window
 // and hand over to the first.
@@ -1167,6 +1219,7 @@ SCENARIOS.singleInstance = {
   },
 };
 SCENARIOS.secondInstanceProbe = {
+  helper: true, // started by singleInstance only
   async run(c) { c.check("second instance opened a window", true); },
 };
 

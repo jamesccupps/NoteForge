@@ -8,7 +8,8 @@ const { SCENARIOS } = require("./app/scenarios");
 
 const electron = require("electron"); // the npm package exports the binary path
 const appDir = path.join(__dirname, "app");
-const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(SCENARIOS);
+// (helper scenarios run only as the second process of another scenario)
+const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(SCENARIOS).filter((n) => !SCENARIOS[n].helper);
 
 let pass = 0, fail = 0;
 for (const name of names) {

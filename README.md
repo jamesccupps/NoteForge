@@ -71,7 +71,7 @@ Full history is in [CHANGELOG.md](CHANGELOG.md).
 Download the latest installer from [Releases](../../releases):
 
 - **`NoteForge Setup x.x.x.exe`** — Standard Windows installer (recommended)
-- **`NoteForge-x.x.x-portable.exe`** — Portable version, no install needed
+- **`NoteForge-x.x.x-portable.exe`** — Portable version, no install needed. It keeps its notes in a `NoteForge Data` folder next to the exe, so they travel with it (from 2.9.0; on first run it offers to copy notes found on the PC). It doesn't update itself: when a new version is out it opens the download page, and the new exe goes in the same folder
 
 Releases are built automatically by GitHub Actions — no manual build steps required.
 
@@ -208,6 +208,7 @@ To update the bundled DOMPurify: bump the exact `dompurify` version in `package.
 | Windows | `%APPDATA%\noteforge\` |
 | macOS | `~/Library/Application Support/noteforge/` |
 | Linux | `~/.config/noteforge/` |
+| Portable build | `NoteForge Data` next to the portable exe |
 
 Files: `noteforge-data.json` (unencrypted) or `noteforge-data.enc` (encrypted), `window-state.json`, `ratelimit.json`, `noteforge-hint.txt`, `noteforge-config.json`, `noteforge-data.enc.pre-restore.bak` / `noteforge-data.json.pre-restore.bak` (after a restore, for rollback), `noteforge-data.prev-1.enc` to `prev-3.enc` (the encrypted vault at each of the last 3 unlocks; removed when the master password changes or encryption is turned off). A `*.tmp` file exists only for the moment a save is being written.
 
