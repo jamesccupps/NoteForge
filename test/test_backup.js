@@ -37,6 +37,22 @@ const vaultValue = async (h, pw) => (await h.restart().invoke("unlock-master", p
     h.cleanup();
   }
 
+  section("Exported HTML carries its own CSP");
+  {
+    // Opened in a browser, the export must not run script or load anything remote
+    // even if the HTML handed to main contains it
+    const h = loadMain();
+    const out = path.join(h.userData, "page.html");
+    h.dialogs.messageBoxResponse = 0;
+    h.dialogs.save = { canceled: false, filePath: out };
+    await h.invoke("export-html", "Page", "<p>x</p>", false);
+    const doc = fs.readFileSync(out, "utf-8");
+    const meta = doc.indexOf('http-equiv="Content-Security-Policy"');
+    t("export has a CSP meta in its head", meta > 0 && meta < doc.indexOf("</head>"));
+    t("...that blocks scripts and remote loads", /default-src 'none'/.test(doc) && /img-src data:/.test(doc) && !/script-src/.test(doc));
+    h.cleanup();
+  }
+
   section("Restore: happy path");
   {
     const { h, backupPath } = await setup();
