@@ -846,6 +846,8 @@ function createWindow() {
       contextIsolation: true, nodeIntegration: false,
       sandbox: useSandbox,
       spellcheck: true, navigateOnDragDrop: false,
+      // Packaged builds can't open DevTools at all (the menu item is dev-only too)
+      devTools: IS_DEV,
     },
   });
 

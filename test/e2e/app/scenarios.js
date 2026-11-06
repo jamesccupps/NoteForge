@@ -1003,6 +1003,21 @@ SCENARIOS.restoreBackup = {
   },
 };
 
+// CSP: a <base> element must not re-point relative URLs (base-uri 'none'), and forms
+// can't submit anywhere (form-action 'none')
+SCENARIOS.cspBaseAndForms = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const before = await c.js(`document.baseURI`);
+    await c.js(`(()=>{const b=document.createElement("base");b.href="https://example.invalid/";document.head.prepend(b)})()`);
+    c.check("an injected <base> is ignored", (await c.js(`document.baseURI`)) === before, await c.js(`document.baseURI`));
+    c.consumeConsoleErrors(/base-uri|Content Security Policy/i);
+    const csp = await c.js(`document.querySelector('meta[http-equiv="Content-Security-Policy"]').content`);
+    c.check("form-action 'none' in the CSP", /form-action 'none'/.test(csp), csp);
+  },
+};
+
 // Restoring your own backup while a protected notebook is unlocked: every id matches,
 // so session state left over from before the restore made it look unlocked and empty.
 SCENARIOS.restoreResetsUnlockedNotebooks = {

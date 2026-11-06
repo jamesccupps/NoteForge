@@ -41,6 +41,8 @@ t("CSP meta tag present", /Content-Security-Policy/i.test(html));
 t("CSP blocks connect-src", /connect-src 'none'/.test(html));
 t("CSP has script-src 'self'", /script-src 'self'/.test(html));
 t("CSP has default-src 'none'", /default-src 'none'/.test(html));
+t("CSP has base-uri 'none'", /base-uri 'none'/.test(html));
+t("CSP has form-action 'none'", /form-action 'none'/.test(html));
 // Note: SRI hashes intentionally NOT used — they break Electron's file:// loader
 // (CORS fails silently with integrity+crossorigin on local files). Packaged builds
 // rely on the embedded-asar-integrity fuse instead (see build.electronFuses).
@@ -59,6 +61,7 @@ t("All preload IPC channels have main handlers", missing.length === 0, missing.l
 
 t("contextIsolation enabled", /contextIsolation:\s*true/.test(main));
 t("nodeIntegration disabled", /nodeIntegration:\s*false/.test(main));
+t("DevTools off in packaged builds", /devTools:\s*IS_DEV/.test(main));
 t("sandbox option present", /sandbox:\s*useSandbox/.test(main));
 t("Navigation guard present", /will-navigate/.test(main));
 t("Permission handler denies all", /setPermissionRequestHandler.*cb\(false\)/s.test(main));
