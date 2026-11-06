@@ -46,7 +46,8 @@ Only the latest release (currently the 2.x line) receives security updates. Olde
 | Encryption algorithm | AES-256-GCM |
 | Key derivation | scrypt (N=65536, r=8, p=1) |
 | Minimum accepted N on decrypt | 16384 (rejects weaker) |
-| Maximum accepted N on decrypt | 1048576 (rejects pathologically-large, DoS defense) |
+| Maximum accepted N on decrypt | 131072, and at most 128 MiB of scrypt memory (128·N·r); DoS defense |
+| Parameters written | the ones the cached key was derived with; a blob with other accepted parameters is re-encrypted with the current ones on unlock |
 | Accepted r / p on decrypt | r 8–32, p 1–16, integers only (written as r=8, p=1) |
 | Key length | 32 bytes |
 | IV / nonce | 16 bytes, random per encryption (GCM derives J0 from a non-96-bit IV via GHASH) |

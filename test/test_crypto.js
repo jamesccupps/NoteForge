@@ -74,6 +74,46 @@ const DATA = JSON.stringify({ notebooks: [{ id: "nb1", name: "Test", sections: [
     h.cleanup();
   }
 
+  section("Keys keep the parameters they were derived with");
+  // A v2 file with accepted but non-default parameters (an older backup, or a future
+  // default). Saves used to write the default header over a key made with these, and
+  // the next unlock derived a different key: "Wrong password" for good.
+  for (const opts of [{ N: 16384 }, { N: 32768, r: 16 }, { N: 65536, p: 2 }]) {
+    const label = JSON.stringify(opts);
+    const h = loadMain();
+    h.write("noteforge-data.enc", makeBlob(DATA, PW, opts));
+    t(`${label}: unlocks`, (await h.invoke("unlock-master", PW)).value === DATA);
+    const NEW = DATA.replace("Hello", "Saved after unlock");
+    t(`${label}: save succeeds`, (await h.invoke("storage-set", NEW)).ok === true);
+    const r = await h.restart().invoke("unlock-master", PW);
+    t(`${label}: still opens after a save`, r.value === NEW, JSON.stringify(r));
+    const hdr = JSON.parse(h.read("noteforge-data.enc"));
+    t(`${label}: upgraded to the current parameters`, hdr.N === 65536 && hdr.r === 8 && hdr.p === 1, JSON.stringify({ N: hdr.N, r: hdr.r, p: hdr.p }));
+    h.cleanup();
+  }
+  {
+    const h = loadMain();
+    const secs = JSON.stringify([{ id: "s", pages: [{ content: "nb" }] }]);
+    const blob = makeBlob(secs, PW, { N: 32768, r: 16 });
+    const d = await h.invoke("decrypt-notebook-sections", blob, PW);
+    const r = await h.invoke("storage-set", JSON.stringify({ notebooks: [{ id: "nb", locked: true, encSections: blob, sections: JSON.parse(secs) }] }), { nb: d.nbKeyId });
+    const again = await h.invoke("decrypt-notebook-sections", r.blobs.nb, PW);
+    t("notebook blob with other parameters still opens after a save", again.sections === secs, JSON.stringify(again));
+    t("notebook blob upgraded to the current parameters", JSON.parse(r.blobs.nb).N === 65536 && JSON.parse(r.blobs.nb).r === 8);
+    h.cleanup();
+  }
+  {
+    // The documented range must be reachable: scrypt's maxmem used to refuse N=2^17
+    const h = loadMain();
+    h.write("noteforge-data.enc", makeBlob(DATA, PW, { N: 1 << 17 }));
+    t("N=2^17, r=8 (128 MiB) opens", (await h.invoke("unlock-master", PW)).value === DATA);
+    h.write("noteforge-data.enc", makeBlob(DATA, PW, { header: { N: 1 << 17, r: 16 } }));
+    const t0 = Date.now();
+    const big = await h.restart().invoke("unlock-master", PW);
+    t("N=2^17, r=16 (256 MiB) rejected without deriving", !!big.error && Date.now() - t0 < 1000);
+    h.cleanup();
+  }
+
   section("v1 legacy blob");
   {
     const h = loadMain();

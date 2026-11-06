@@ -112,9 +112,9 @@ Output goes to `dist/`. The `predist` hook runs tests before building — if any
 - Master password is **never stored** — only the derived key (Buffer) lives in memory during the session
 - Session key is zeroed (`Buffer.fill(0)`) on lock, close, and idle timeout
 - While the app is locked the main process **refuses to write** the data file, so a late save can't leave a decrypted copy next to the `.enc` file
-- Locked notebook sections are **stripped from every write twice**: by `sanitizeForDiskSync()` in the renderer and again in the main process
+- Password-protected notebooks that are open are **encrypted by the main process on every save**, with the key cached at unlock, and their plaintext is stripped before the write
 - **Per-notebook** rate limiting with exponential backoff on failed password attempts (persisted across restarts). This only slows guessing *through the app*; against a copied data file, the scrypt cost is the only barrier, so password strength is what matters
-- KDF validation on decrypt: rejects weakened parameters (N < 16384, r < 8) and DoS-sized ones (N > 2²⁰, r > 32, p > 16)
+- KDF validation on decrypt: rejects weakened parameters (N < 16384, r < 8) and DoS-sized ones (N > 2¹⁷, more than 128 MiB of scrypt memory, r > 32, p > 16)
 - Password strength enforcement: 10+ chars, 3/4 character classes, dictionary check against 160+ common passwords, low-entropy rejection
 
 ### Content Security Policy (Renderer)

@@ -32,32 +32,42 @@ const ALGO = "aes-256-gcm";
 const KEY_LEN = 32;
 const SALT_LEN = 32;
 const IV_LEN = 16;
-const SCRYPT_N = 65536;
-const SCRYPT_R = 8;
-const SCRYPT_P = 1;
-const SCRYPT_MAXMEM = 128 * 1024 * 1024;
+// What new keys are derived with. A key only opens blobs whose header names the
+// parameters it was made with, so every cached key carries its own (KeyEntry) and
+// saves write those.
+const KDF = { N: 65536, r: 8, p: 1 };
+// scrypt needs about 128·N·r bytes. Headers are capped at half of this (below), so
+// every accepted one fits; at 128 MiB, maxmem used to refuse N=2^17 outright.
+const SCRYPT_MAXMEM = 256 * 1024 * 1024;
 
-function deriveKey(password, salt, N, r, p) {
-  return crypto.scryptSync(password, salt, KEY_LEN, {
-    N: N || SCRYPT_N, r: r || SCRYPT_R, p: p || SCRYPT_P, maxmem: SCRYPT_MAXMEM
+// KeyEntry: { key: Buffer, salt: Buffer, N, r, p }
+function deriveKey(password, salt, kdf = KDF) {
+  const key = crypto.scryptSync(password, salt, KEY_LEN, { N: kdf.N, r: kdf.r, p: kdf.p, maxmem: SCRYPT_MAXMEM });
+  return { key, salt, N: kdf.N, r: kdf.r, p: kdf.p };
+}
+const isCurrentKdf = (k) => k.N === KDF.N && k.r === KDF.r && k.p === KDF.p;
+function zeroKey(k) { if (k) k.key.fill(0); }
+
+// Encrypt under an already-derived key (no scrypt on the save path). The header
+// names that key's own salt and parameters: writing the defaults over a key made
+// with others left a blob no password could open.
+function sealWithKey(plaintext, k) {
+  const iv = crypto.randomBytes(IV_LEN);
+  const cipher = crypto.createCipheriv(ALGO, k.key, iv);
+  let enc = cipher.update(plaintext, "utf-8", "base64");
+  enc += cipher.final("base64");
+  return JSON.stringify({
+    v: 2, kdf: "scrypt", N: k.N, r: k.r, p: k.p,
+    salt: k.salt.toString("hex"), iv: iv.toString("hex"),
+    tag: cipher.getAuthTag().toString("hex"), data: enc,
   });
 }
 
-// Full encrypt (for initial setup, password changes, notebook encryption)
+// Encrypt under a fresh salt and the current parameters. Returns the blob and its
+// key, so callers cache that key rather than running scrypt a second time.
 function encryptData(plaintext, password) {
-  const salt = crypto.randomBytes(SALT_LEN);
-  const key = deriveKey(password, salt);
-  const iv = crypto.randomBytes(IV_LEN);
-  const cipher = crypto.createCipheriv(ALGO, key, iv);
-  let enc = cipher.update(plaintext, "utf-8", "base64");
-  enc += cipher.final("base64");
-  const tag = cipher.getAuthTag();
-  key.fill(0);
-  return JSON.stringify({
-    v: 2, kdf: "scrypt", N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P,
-    salt: salt.toString("hex"), iv: iv.toString("hex"),
-    tag: tag.toString("hex"), data: enc,
-  });
+  const k = deriveKey(password, crypto.randomBytes(SALT_LEN));
+  return { blob: sealWithKey(plaintext, k), k };
 }
 
 // Full decrypt (for initial unlock, password verification)
@@ -66,12 +76,14 @@ function encryptData(plaintext, password) {
 const MIN_SCRYPT_N = 16384;  // legacy v1 floor; never accept weaker
 const MIN_SCRYPT_R = 8;
 const MIN_SCRYPT_P = 1;
-const MAX_SCRYPT_N = 1 << 20; // sanity cap — prevents DoS via huge N
+const MAX_SCRYPT_N = 1 << 17; // DoS caps: with r=8, 128 MiB
+const MAX_SCRYPT_MEM = SCRYPT_MAXMEM / 2; // 128·N·r
 // Cost is linear in p, and maxmem alone still admits p up to ~65k at N=65536
 // (~2 h of scryptSync blocking the main process). Caps leave headroom far above
 // what NoteForge writes (r=8, p=1).
 const MAX_SCRYPT_R = 32;
 const MAX_SCRYPT_P = 16;
+// -> { plaintext, k: KeyEntry, isV1 }
 function decryptData(encJson, password) {
   const obj = JSON.parse(encJson);
   const N = obj.N || 16384, r = obj.r || 8, p = obj.p || 1;
@@ -81,49 +93,43 @@ function decryptData(encJson, password) {
   if (r < MIN_SCRYPT_R || r > MAX_SCRYPT_R) throw new Error("Invalid KDF parameters (r)");
   if (p < MIN_SCRYPT_P || p > MAX_SCRYPT_P) throw new Error("Invalid KDF parameters (p)");
   if ((N & (N - 1)) !== 0) throw new Error("Invalid KDF parameters (N must be power of 2)");
+  if (128 * N * r > MAX_SCRYPT_MEM) throw new Error("Invalid KDF parameters (memory)");
   // Validate field shapes before feeding to crypto APIs
   if (typeof obj.salt !== "string" || typeof obj.iv !== "string" ||
       typeof obj.tag !== "string" || typeof obj.data !== "string") {
     throw new Error("Malformed encrypted blob");
   }
-  const salt = Buffer.from(obj.salt, "hex");
-  const key = deriveKey(password, salt, N, r, p);
-  const decipher = crypto.createDecipheriv(ALGO, key, Buffer.from(obj.iv, "hex"));
-  decipher.setAuthTag(Buffer.from(obj.tag, "hex"));
-  let dec = decipher.update(obj.data, "base64", "utf-8");
-  dec += decipher.final("utf-8");
-  // Return key info for session caching
-  return { plaintext: dec, key, salt, isV1: !obj.v || obj.v < 2 };
+  const k = deriveKey(password, Buffer.from(obj.salt, "hex"), { N, r, p });
+  try {
+    const decipher = crypto.createDecipheriv(ALGO, k.key, Buffer.from(obj.iv, "hex"));
+    decipher.setAuthTag(Buffer.from(obj.tag, "hex"));
+    let dec = decipher.update(obj.data, "base64", "utf-8");
+    dec += decipher.final("utf-8");
+    return { plaintext: dec, k, isV1: !obj.v || obj.v < 2 };
+  } catch (e) { zeroKey(k); throw e; }
 }
 
-/* ── Session key (derived key stored instead of password) ───── */
-let sessionKey = null;   // Buffer — can be zeroed
-let sessionSalt = null;  // Buffer — for re-encryptions
-const nbSessionKeys = new Map(); // nbKeyId -> { key: Buffer, salt: Buffer }
-
-// Encrypt under an already-derived key (no scrypt on the save path)
-function sealWithKey(plaintext, key, salt) {
-  const iv = crypto.randomBytes(IV_LEN);
-  const cipher = crypto.createCipheriv(ALGO, key, iv);
-  let enc = cipher.update(plaintext, "utf-8", "base64");
-  enc += cipher.final("base64");
-  const tag = cipher.getAuthTag();
-  return JSON.stringify({
-    v: 2, kdf: "scrypt", N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P,
-    salt: salt.toString("hex"), iv: iv.toString("hex"),
-    tag: tag.toString("hex"), data: enc,
-  });
+// After a decrypt: keep its key when it was made with the current parameters,
+// otherwise derive one that is (fresh salt), so the next save upgrades the blob.
+function currentKeyFor(password, k) {
+  if (isCurrentKdf(k)) return k;
+  zeroKey(k);
+  return deriveKey(password, crypto.randomBytes(SALT_LEN));
 }
+
+/* ── Session keys (derived keys stored instead of passwords) ── */
+let masterKey = null;            // master KeyEntry while unlocked; zeroed on lock
+const nbSessionKeys = new Map(); // nbKeyId -> notebook KeyEntry
 
 function encryptWithSession(plaintext) {
-  if (!sessionKey) throw new Error("No session key");
-  return sealWithKey(plaintext, sessionKey, sessionSalt);
+  if (!masterKey) throw new Error("No session key");
+  return sealWithKey(plaintext, masterKey);
 }
 
 function decryptWithSession(encJson) {
-  if (!sessionKey) throw new Error("No session key");
+  if (!masterKey) throw new Error("No session key");
   const obj = JSON.parse(encJson);
-  const decipher = crypto.createDecipheriv(ALGO, sessionKey, Buffer.from(obj.iv, "hex"));
+  const decipher = crypto.createDecipheriv(ALGO, masterKey.key, Buffer.from(obj.iv, "hex"));
   decipher.setAuthTag(Buffer.from(obj.tag, "hex"));
   let dec = decipher.update(obj.data, "base64", "utf-8");
   dec += decipher.final("utf-8");
@@ -131,14 +137,14 @@ function decryptWithSession(encJson) {
 }
 
 function clearMasterKey() {
-  if (sessionKey) { sessionKey.fill(0); sessionKey = null; }
-  sessionSalt = null;
+  zeroKey(masterKey);
+  masterKey = null;
 }
 
 function lockSession() {
   clearMasterKey();
   // Zero all per-notebook session keys
-  for (const entry of nbSessionKeys.values()) entry.key.fill(0);
+  for (const entry of nbSessionKeys.values()) zeroKey(entry);
   nbSessionKeys.clear();
 }
 
@@ -355,7 +361,7 @@ ipcMain.handle("set-hint", async (_e, hint) => {
 ipcMain.handle("storage-get", async () => {
   try {
     if (fs.existsSync(encFile)) {
-      if (!sessionKey) return { needsPassword: true };
+      if (!masterKey) return { needsPassword: true };
       return { value: decryptWithSession(fs.readFileSync(encFile, "utf-8")) };
     }
     if (fs.existsSync(plainFile)) return { value: fs.readFileSync(plainFile, "utf-8") };
@@ -385,7 +391,7 @@ function sealOpenNotebooks(value, nbKeyIds) {
     const keyId = Object.prototype.hasOwnProperty.call(keys, nb.id) ? keys[nb.id] : null;
     const entry = typeof keyId === "string" ? nbSessionKeys.get(keyId) : null;
     if (!entry) { unsealed.push(nb.id); continue; }
-    nb.encSections = sealWithKey(JSON.stringify(nb.sections), entry.key, entry.salt);
+    nb.encSections = sealWithKey(JSON.stringify(nb.sections), entry);
     nb.sections = [];
     blobs[nb.id] = nb.encSections;
     changed = true;
@@ -396,10 +402,10 @@ function sealOpenNotebooks(value, nbKeyIds) {
 // Returns { ok, blobs, unsealed } (see sealOpenNotebooks)
 function writeAppData(value, nbKeyIds) {
   if (typeof value !== "string") return { ok: false };
-  if (!sessionKey && fs.existsSync(encFile)) return { ok: false };
+  if (!masterKey && fs.existsSync(encFile)) return { ok: false };
   const sealed = sealOpenNotebooks(value, nbKeyIds);
   value = stripLockedSections(sealed.value);
-  if (sessionKey) {
+  if (masterKey) {
     writeFileAtomic(encFile, encryptWithSession(value));
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
   } else {
@@ -427,20 +433,17 @@ ipcMain.handle("unlock-master", async (_e, password) => {
     const raw = fs.readFileSync(encFile, "utf-8");
     const result = decryptData(raw, password);
     recordMasterSuccess();
-    // Auto-upgrade v1 → v2: re-encrypt with FULL v2 params using the password
-    // MUST happen before we discard the password, because the v1-derived key
-    // can't be used with v2 headers (different N → different key from same password)
-    if (result.isV1) {
-      result.key.fill(0); // discard v1 key
-      const v2enc = encryptData(result.plaintext, password);
-      writeFileAtomic(encFile, v2enc);
-      // Now derive the session key from the v2 file
-      const v2obj = JSON.parse(v2enc);
-      sessionSalt = Buffer.from(v2obj.salt, "hex");
-      sessionKey = deriveKey(password, sessionSalt);
+    // A v1 file, or one made with other parameters: re-encrypt it with the current
+    // ones while the password is at hand. Now, not at the next save, because
+    // storage-get reads the file back with the cached key.
+    zeroKey(masterKey);
+    if (result.isV1 || !isCurrentKdf(result.k)) {
+      zeroKey(result.k);
+      const e = encryptData(result.plaintext, password);
+      writeFileAtomic(encFile, e.blob);
+      masterKey = e.k;
     } else {
-      sessionKey = result.key;
-      sessionSalt = result.salt;
+      masterKey = result.k;
     }
     return { success: true, value: result.plaintext };
   } catch (e) { recordMasterFailure(); return { error: "Wrong password" }; }
@@ -452,16 +455,14 @@ ipcMain.handle("enable-encryption", async (_e, password, hint) => {
   try {
     let data = "{}";
     if (fs.existsSync(plainFile)) data = fs.readFileSync(plainFile, "utf-8");
-    else if (sessionKey) data = decryptWithSession(fs.readFileSync(encFile, "utf-8"));
+    else if (masterKey) data = decryptWithSession(fs.readFileSync(encFile, "utf-8"));
     // Sanitize before encrypting
     data = sanitizeDataJson(data);
-    const enc = encryptData(data, password);
-    writeFileAtomic(encFile, enc);
+    const e = encryptData(data, password);
+    writeFileAtomic(encFile, e.blob);
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
-    // Cache new session key
-    const obj = JSON.parse(enc);
-    sessionKey = deriveKey(password, Buffer.from(obj.salt, "hex"));
-    sessionSalt = Buffer.from(obj.salt, "hex");
+    zeroKey(masterKey);
+    masterKey = e.k;
     // Save hint
     if (hint && hint.trim()) fs.writeFileSync(hintFile, hint.trim(), "utf-8");
     return { success: true };
@@ -474,7 +475,7 @@ ipcMain.handle("disable-encryption", async (_e, password) => {
   try {
     if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
     const result = decryptData(fs.readFileSync(encFile, "utf-8"), password);
-    result.key.fill(0);
+    zeroKey(result.k);
     // Sanitize before writing plaintext
     writeFileAtomic(plainFile, sanitizeDataJson(result.plaintext));
     fs.unlinkSync(encFile);
@@ -495,16 +496,14 @@ ipcMain.handle("change-master-password", async (_e, oldPassword, newPassword) =>
   try {
     if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
     const result = decryptData(fs.readFileSync(encFile, "utf-8"), oldPassword);
-    result.key.fill(0);
-    // Re-encrypt with new password, sanitize
-    const sanitized = sanitizeDataJson(result.plaintext);
-    const enc = encryptData(sanitized, newPassword);
-    writeFileAtomic(encFile, enc);
-    // Cache new session key
-    const obj = JSON.parse(enc);
-    if (sessionKey) sessionKey.fill(0);
-    sessionKey = deriveKey(newPassword, Buffer.from(obj.salt, "hex"));
-    sessionSalt = Buffer.from(obj.salt, "hex");
+    zeroKey(result.k);
+    // Re-encrypt with the new password. The session key is replaced only once the new
+    // file is written: a second scrypt used to run after the old key was zeroed, and
+    // if it failed, saves encrypted under an all-zero key.
+    const e = encryptData(sanitizeDataJson(result.plaintext), newPassword);
+    writeFileAtomic(encFile, e.blob);
+    zeroKey(masterKey);
+    masterKey = e.k;
     recordMasterSuccess();
     return { success: true };
   } catch (e) { recordMasterFailure(); return { error: "Wrong current password" }; }
@@ -519,7 +518,7 @@ ipcMain.handle("verify-master-password", async (_e, password) => {
   if (rlErr) return { error: rlErr };
   try {
     if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
-    decryptData(fs.readFileSync(encFile, "utf-8"), password).key.fill(0);
+    zeroKey(decryptData(fs.readFileSync(encFile, "utf-8"), password).k);
     recordMasterSuccess();
     return { success: true };
   } catch (e) { recordMasterFailure(); return { error: "Wrong current password" }; }
@@ -533,14 +532,11 @@ ipcMain.handle("encrypt-notebook-sections", async (_e, json, password) => {
   const strengthErr = checkPasswordStrength(password);
   if (strengthErr) return { error: strengthErr };
   try {
-    const blob = encryptData(json, password);
-    // Cache session key derived from the fresh blob's salt so renderer doesn't have to re-derive per edit
-    const obj = JSON.parse(blob);
-    const salt = Buffer.from(obj.salt, "hex");
-    const key = deriveKey(password, salt);
+    const e = encryptData(json, password);
+    // Cache the key under a random handle; saves seal the notebook with it (writeAppData)
     const nbKeyId = crypto.randomBytes(16).toString("hex");
-    nbSessionKeys.set(nbKeyId, { key, salt });
-    return { success: true, blob, nbKeyId };
+    nbSessionKeys.set(nbKeyId, e.k);
+    return { success: true, blob: e.blob, nbKeyId };
   }
   catch (e) { return { error: e.message }; }
 });
@@ -554,14 +550,14 @@ ipcMain.handle("decrypt-notebook-sections", async (_e, blob, password) => {
     recordNbSuccess(nbKey);
     // Cache the derived key under a random handle so renderer holds only a handle, not the password
     const nbKeyId = crypto.randomBytes(16).toString("hex");
-    nbSessionKeys.set(nbKeyId, { key: result.key, salt: result.salt });
+    nbSessionKeys.set(nbKeyId, currentKeyFor(password, result.k));
     return { success: true, sections: result.plaintext, nbKeyId };
   } catch (e) { recordNbFailure(nbKey); return { error: "Wrong password" }; }
 });
 
 ipcMain.handle("forget-notebook-key", async (_e, nbKeyId) => {
   const entry = nbSessionKeys.get(nbKeyId);
-  if (entry) { entry.key.fill(0); nbSessionKeys.delete(nbKeyId); }
+  if (entry) { zeroKey(entry); nbSessionKeys.delete(nbKeyId); }
   return { success: true };
 });
 
@@ -648,8 +644,7 @@ ipcMain.handle("verify-and-restore-backup", async (_e, backupPath, password) => 
     const headerErr = backupHeaderError(JSON.parse(raw));
     if (headerErr) return { error: headerErr };
     // Test-decrypt — if this throws, the password is wrong and we do NOTHING destructive
-    const result = decryptData(raw, password);
-    result.key.fill(0); // zero the test key immediately; we'll re-derive on next unlock
+    zeroKey(decryptData(raw, password).k); // a test decrypt; the next unlock derives its own
   } catch (e) {
     return { error: "Could not decrypt backup — wrong password or corrupted file" };
   }
