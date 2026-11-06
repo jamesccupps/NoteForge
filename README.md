@@ -1,6 +1,6 @@
 # NoteForge
 
-**Encrypted, offline note-taking.** A OneNote-style app that keeps your data local and protected with AES-256-GCM encryption.
+**Encrypted, offline note-taking for Windows.** A OneNote-style desktop app (Windows 10 and 11) that keeps your data local and protected with AES-256-GCM encryption. There is no mobile version.
 
 **Website and download:** [jamesccupps.github.io/NoteForge](https://jamesccupps.github.io/NoteForge/)
 
