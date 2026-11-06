@@ -742,6 +742,9 @@ ipcMain.handle("verify-and-restore-backup", async (_e, backupPath, password) => 
     writeFileAtomic(encFile, raw); // the bytes that just decrypted, not a re-read of the path
     if (fs.existsSync(backupPath + ".hint")) {
       fs.writeFileSync(hintFile, fs.readFileSync(backupPath + ".hint", "utf-8"), "utf-8");
+    } else if (fs.existsSync(hintFile)) {
+      // The hint described the password being replaced; left in place it points at the wrong one
+      fs.unlinkSync(hintFile);
     }
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
   } catch (e) {

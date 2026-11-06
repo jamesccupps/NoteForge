@@ -53,6 +53,22 @@ const vaultValue = async (h, pw) => (await h.restart().invoke("unlock-master", p
     h.cleanup();
   }
 
+  section("Restore: the hint follows the backup");
+  {
+    // The old hint describes the old password; after restoring a backup made without
+    // a hint file it would point at the wrong one
+    const { h, backupPath } = await setup();
+    h.write("noteforge-hint.txt", "the old password's hint");
+    await pick(h, backupPath);
+    await h.invoke("verify-and-restore-backup", backupPath, BACKUP_PW);
+    t("backup without a hint: old hint removed", !h.exists("noteforge-hint.txt"));
+    fs.writeFileSync(backupPath + ".hint", "backup hint");
+    await pick(h, backupPath);
+    await h.invoke("verify-and-restore-backup", backupPath, BACKUP_PW);
+    t("backup with a hint: its hint installed", h.read("noteforge-hint.txt") === "backup hint");
+    h.cleanup();
+  }
+
   section("Restore: renderer can only restore the file the user picked");
   {
     const { h, backupPath } = await setup();

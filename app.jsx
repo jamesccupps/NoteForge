@@ -1501,6 +1501,9 @@ function NoteForge(){
         // (a notebook unlocked before it looked unlocked, and empty, after it)
         if(saveTimer.current){clearTimeout(saveTimer.current);saveTimer.current=null}
         resetSession();setVaultDamaged(false);
+        // The lock screen shows the restored file's hint (or none), not the old password's
+        const st=await window.electronAPI.checkEncryption().catch(()=>null);
+        setMasterHint(st?.hint||"");
         dataRef.current=null;setData(null);setANb(null);setASec(null);setAPg(null);prevPgRef.current=null;
         setEncEnabled(true);setAppPhase("needsPassword");
       }

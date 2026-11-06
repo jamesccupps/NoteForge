@@ -1248,7 +1248,7 @@ SCENARIOS.damagedVaultOffersRestore = {
   async run(c) {
     const fs = require("fs");
     await c.waitFor(`document.querySelector(".nf-editor")`);
-    await c.js(`window.electronAPI.enableEncryption(${JSON.stringify(BACKUP_PW)},"")`);
+    await c.js(`window.electronAPI.enableEncryption(${JSON.stringify(BACKUP_PW)},"old-hint")`);
     const enc = fs.readFileSync(c.file("noteforge-data.enc"), "utf-8");
     fs.writeFileSync(c.file("noteforge-data.enc"), enc.slice(0, 200)); // truncated
     c.win.webContents.reload();
@@ -1268,6 +1268,8 @@ SCENARIOS.damagedVaultOffersRestore = {
     await c.js(`${R.button(".nf-modal-btn", "OK")}.click()`);
     await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Unlock NoteForge"`);
     c.check("no Restore button once the vault is fine", !(await c.js(`!!${R.button(".nf-overlay-btn", "Restore from Backup…")}`)));
+    await c.sleep(300);
+    c.check("the old password's hint isn't shown for the restored file", !(await c.js(`document.body.innerText.includes("old-hint")`)));
     await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
     await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
     await c.waitFor(`${R.editorText}.includes("alpha body")`);
