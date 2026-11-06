@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NoteForge: encrypted, offline notes for Windows</title>
+<meta name="description" content="NoteForge is a free, open-source note-taking app for Windows: notebooks, sections and pages like OneNote, encrypted on your own PC with AES-256-GCM and a master password. No account, no cloud.">
+<link rel="canonical" href="https://jamesccupps.github.io/NoteForge/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="NoteForge: encrypted, offline notes for Windows">
+<meta property="og:description" content="Notebooks, sections and pages, encrypted on your own PC. A password per notebook if you want one. No account, no cloud. Free and open source.">
+<meta property="og:url" content="https://jamesccupps.github.io/NoteForge/">
+<meta property="og:image" content="https://jamesccupps.github.io/NoteForge/images/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="images/icon.png">
+<link rel="apple-touch-icon" href="images/icon.png">
+<meta name="color-scheme" content="light dark">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "NoteForge",
+  "description": "Encrypted, offline note-taking for Windows: notebooks, sections and pages, AES-256-GCM with a master password, and an optional password per notebook.",
+  "url": "https://jamesccupps.github.io/NoteForge/",
+  "codeRepository": "https://github.com/jamesccupps/NoteForge",
+  "downloadUrl": "https://github.com/jamesccupps/NoteForge/releases/latest",
+  "applicationCategory": "ProductivityApplication",
+  "applicationSubCategory": "Note-taking",
+  "operatingSystem": "Windows 10, Windows 11",
+  "image": "https://jamesccupps.github.io/NoteForge/images/social-preview.png",
+  "screenshot": "https://jamesccupps.github.io/NoteForge/images/noteforge-dark.png",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "James Cupps", "url": "https://jamesccupps.github.io/" }
+}
+</script>
+<style>
+  :root {
+    --bg: #f7f7fb; --panel: #ffffff; --text: #1c1b29; --muted: #5d5b72; --line: #e3e2ee;
+    --accent: #5b4fd6; --code: #efeef7; --hero: linear-gradient(155deg, #2b2556 0%, #14141c 70%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121218; --panel: #1b1b24; --text: #e8e7f2; --muted: #a09eb8; --line: #2b2a38; --accent: #9d93ff; --code: #23232f; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 "Segoe UI", system-ui, -apple-system, Ubuntu, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  header.hero { background: var(--hero); color: #fff; padding: 56px 0 40px; }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .brand img { width: 64px; height: 64px; }
+  .brand h1 { margin: 0; font-size: 44px; font-weight: 600; letter-spacing: -0.5px; }
+  .tagline { font-size: 23px; margin: 18px 0 6px; max-width: 680px; }
+  .facts { color: #c9c4f2; margin: 0 0 26px; max-width: 680px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 8px; font-weight: 600;
+         text-decoration: none; background: #fff; color: #2b2556; font-size: 17px; }
+  .btn:hover { background: #ecebfb; }
+  .btn.ghost { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.45); font-weight: 500; font-size: 15px; padding: 10px 16px; }
+  .btn.ghost:hover { background: rgba(255,255,255,.1); }
+  .btn small { font-weight: 400; opacity: .75; font-size: 13px; }
+  .sub { color: #c9c4f2; font-size: 14px; margin-top: 12px; }
+  .sub a { color: #e4e1ff; }
+  .demo { margin: 34px 0 0; }
+  .demo img { width: 100%; height: auto; display: block; border-radius: 8px; box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+  section { padding: 44px 0 8px; }
+  h2 { font-size: 26px; margin: 0 0 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .shots figure { margin: 0; }
+  .shots img { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); display: block; }
+  .shots figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .security { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; }
+  .security ul { margin: 0; padding-left: 20px; }
+  .security li { margin: 0 0 10px; }
+  .security img { width: 100%; height: auto; border-radius: 10px; display: block; }
+  code { background: var(--code); border-radius: 4px; padding: 1px 5px; font: 14px Consolas, monospace; }
+  .install { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .note { color: var(--muted); font-size: 14px; margin-top: 14px; }
+  footer { color: var(--muted); font-size: 14px; padding: 40px 0 50px; border-top: 1px solid var(--line); margin-top: 44px; }
+  @media (max-width: 760px) { .security { grid-template-columns: 1fr; } .security img { max-width: 320px; } }
+  @media (max-width: 600px) {
+    header.hero { padding: 36px 0 28px; }
+    .brand h1 { font-size: 36px; }
+    .brand img { width: 52px; height: 52px; }
+    .tagline { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="brand"><img src="images/icon.png" alt=""><h1>NoteForge</h1></div>
+    <p class="tagline">Encrypted, offline notes for Windows.</p>
+    <p class="facts">Notebooks, sections and pages, like OneNote, kept on your own PC and encrypted with a master password. Give any notebook its own password too. No account, no cloud, no tracking.</p>
+    <div class="actions">
+      <a class="btn" id="primary" href="https://github.com/jamesccupps/NoteForge/releases/latest">Download for Windows <small id="primary-note">installer</small></a>
+      <a class="btn ghost" id="portable" href="https://github.com/jamesccupps/NoteForge/releases/latest">Portable version</a>
+      <a class="btn ghost" href="https://github.com/jamesccupps/NoteForge">Source on GitHub</a>
+    </div>
+    <p class="sub"><span id="version">Free and open source (MIT).</span> Windows 10 and 11, 64-bit. <a href="https://github.com/jamesccupps/NoteForge/releases">All releases</a></p>
+    <div class="demo"><img src="images/noteforge-dark.png" width="1600" height="917" alt="NoteForge in the dark theme: notebooks and sections on the left, the pages of the Home lab section in the middle, and a note with a checklist, a table, highlighted text and a code block"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section>
+    <h2>Private notes that stay on your PC</h2>
+    <div class="grid">
+      <div class="card"><h3>Encrypted on disk</h3><p>AES-256-GCM, with the key derived from your master password by scrypt. The password itself is never stored, and the key is wiped from memory when NoteForge locks.</p></div>
+      <div class="card"><h3>A password per notebook</h3><p>Lock a notebook with its own password and its pages stay encrypted, even while the rest of NoteForge is open. Re-lock it whenever you like.</p></div>
+      <div class="card"><h3>Nothing leaves your PC</h3><p>No account and no cloud. Fonts and scripts are built in; the only connection NoteForge makes is the update check, and you can turn that off.</p></div>
+      <div class="card"><h3>Organized like a binder</h3><p>Notebooks, sections and pages, with search across every note, pinned pages, and a trash for pages you delete.</p></div>
+      <div class="card"><h3>A real editor</h3><p>Headings, lists, to-do checklists, tables, code blocks, links, highlights and pasted images. Find and replace, with match case. Print and export.</p></div>
+      <div class="card"><h3>Built not to lose notes</h3><p>Crash-safe saves and encrypted backups you can restore. With a master password, the last three versions are kept and NoteForge locks itself when you step away.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Dark and light</h2>
+    <div class="shots">
+      <figure><img src="images/noteforge-dark.png" width="1600" height="917" alt="NoteForge in the dark theme, showing a note with a checklist and a table" loading="lazy"><figcaption>Dark theme: a checklist, a table, a highlight and a code block.</figcaption></figure>
+      <figure><img src="images/noteforge-light.png" width="1600" height="917" alt="NoteForge in the light theme, showing a recipe with a bulleted and a numbered list" loading="lazy"><figcaption>Light theme: lists and a quote.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>How your notes are protected</h2>
+    <div class="security">
+      <ul>
+        <li><strong>Your password is the key.</strong> The master password goes through scrypt (N=65536, r=8, p=1) to make a 256-bit AES-GCM key. GCM authenticates what it decrypts, so a wrong password or a tampered file is refused outright rather than opening as garbled notes.</li>
+        <li><strong>There is no recovery.</strong> That's the point: nobody, including the author, can open your notes without your password. NoteForge insists on a strong one, because against a copied data file the password's strength is all that counts.</li>
+        <li><strong>Notebook passwords are separate.</strong> A protected notebook has its own salt and key; its pages are never written to disk in plain text, even while it's open.</li>
+        <li><strong>The app is locked down.</strong> Note content is sanitized, the window runs in Chromium's sandbox with a strict Content Security Policy, and nothing remote can load or run inside a note.</li>
+        <li><strong>Open to inspection.</strong> The code is on GitHub, and <a href="https://github.com/jamesccupps/NoteForge/blob/main/SECURITY.md">SECURITY.md</a> lists the details and how to report a problem.</li>
+      </ul>
+      <img src="images/noteforge-notebook-lock.png" width="666" height="575" alt="The Unlock Notebook dialog asking for the password of the Finance notebook" loading="lazy">
+    </div>
+  </section>
+
+  <section>
+    <h2>Install</h2>
+    <div class="install">
+      <div class="card" id="installer">
+        <h3>Installer (recommended)</h3>
+        <p><a id="installer-link" href="https://github.com/jamesccupps/NoteForge/releases/latest">Download the installer</a> and run it; no administrator rights needed. NoteForge checks for updates when it starts and installs them when you say so.</p>
+      </div>
+      <div class="card" id="portable-card">
+        <h3>Portable</h3>
+        <p><a id="portable-link" href="https://github.com/jamesccupps/NoteForge/releases/latest">Download the portable exe</a> and run it from any folder or a USB stick. It keeps its notes in a <code>NoteForge Data</code> folder next to it, so they travel with it. To update, put the new exe in the same folder.</p>
+      </div>
+    </div>
+    <p class="note">NoteForge isn't code-signed yet, so Windows SmartScreen may warn on first run: choose <em>More info</em>, then <em>Run anyway</em>. The source and the build workflow are public.</p>
+  </section>
+
+  <section>
+    <h2>Feedback</h2>
+    <p>Found a bug or have an idea? <a href="https://github.com/jamesccupps/NoteForge/issues">Open an issue</a> on GitHub. Security problems: please follow <a href="https://github.com/jamesccupps/NoteForge/blob/main/SECURITY.md">SECURITY.md</a> instead of a public issue.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">NoteForge is free and open source under the MIT license, made by <a href="https://jamesccupps.github.io/">James Cupps</a>. <a href="https://github.com/jamesccupps/NoteForge">github.com/jamesccupps/NoteForge</a></div>
+</footer>
+
+<script>
+(function () {
+  var RELEASES = "https://github.com/jamesccupps/NoteForge/releases/latest";
+  var ua = navigator.userAgent || "";
+  var platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+  var phone = /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.mobile) ||
+    (/Mac/i.test(platform) && navigator.maxTouchPoints > 1);
+  var windows = /Win/i.test(platform) || /Windows/i.test(ua);
+  var primary = document.getElementById("primary"), note = document.getElementById("primary-note");
+  if (phone) {
+    primary.firstChild.nodeValue = "Get NoteForge for your PC ";
+    note.textContent = "Windows";
+  } else if (!windows) {
+    note.textContent = "Windows only for now";
+  }
+  // The file names carry the version, so the links come from the latest release.
+  // (The page works without this: every link falls back to the releases page.)
+  try {
+    fetch("https://api.github.com/repos/jamesccupps/NoteForge/releases/latest").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d) return;
+      var v = (d.tag_name || "").replace(/^v/, "");
+      if (v) document.getElementById("version").textContent = "Version " + v + ", free and open source (MIT).";
+      var find = function (re) { var a = (d.assets || []).filter(function (x) { return re.test(x.name); })[0]; return a && a.browser_download_url; };
+      var setup = find(/^NoteForge-Setup-.*\.exe$/), portable = find(/-portable\.exe$/);
+      if (setup) {
+        document.getElementById("installer-link").href = setup;
+        if (!phone) { primary.href = setup; note.textContent = "NoteForge-Setup-" + v + ".exe"; }
+      }
+      if (portable) { document.getElementById("portable-link").href = portable; document.getElementById("portable").href = portable; }
+    }).catch(function () {});
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

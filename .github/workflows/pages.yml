@@ -1,0 +1,54 @@
+# NoteForge's site on GitHub Pages (https://jamesccupps.github.io/NoteForge/): the page in
+# site/ with the screenshots from docs/screenshots and the app icon. Runs when any of those
+# change on main. The download links and version come from the latest release when the
+# page loads, so a release needs no new deploy.
+# (Settings → Pages → Source must be "GitHub Actions".)
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", "docs/screenshots/**", "assets/icon.png", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Assemble the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The page and its images
+        run: |
+          mkdir -p pages/images
+          cp -r site/. pages/
+          cp docs/screenshots/noteforge-*.png docs/screenshots/social-preview.png pages/images/
+          cp assets/icon.png pages/images/icon.png
+          find pages | sort
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: pages
+
+  deploy:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
