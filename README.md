@@ -13,7 +13,8 @@
 - **Find & Replace** — Highlights every match with a live count; Enter / Shift+Enter step through them; replace one or all
 - **Auto-lock** — Configurable idle timeout (5/15/30/60 min) + Ctrl+L manual lock + per-notebook "Re-lock Now"
 - **Encrypted backup** — Export/restore `.enc` backup files. Restore checks the backup password before touching anything and keeps a rollback copy of your current notes
-- **Crash-safe saves** — The data file is written to a temp file, flushed, and renamed into place, so a crash mid-save can't truncate it
+- **Crash-safe saves** — The data file is written to a temp file, flushed, and renamed into place, so a crash mid-save can't truncate it. If another program holds the file, the save is retried rather than written in place
+- **Earlier versions** — With encryption on, the vault as it was at each of the last 3 unlocks is kept (`noteforge-data.prev-1.enc` is the newest); open one with File → Restore from Backup
 - **Auto-update** — Checks GitHub Releases on launch, downloads and installs updates seamlessly
 - **Dark & light themes** — Persisted across sessions, applied to all dialogs
 - **Export** — HTML and plain text with unencrypted file warnings
@@ -208,7 +209,7 @@ To update the bundled DOMPurify: bump the exact `dompurify` version in `package.
 | macOS | `~/Library/Application Support/noteforge/` |
 | Linux | `~/.config/noteforge/` |
 
-Files: `noteforge-data.json` (unencrypted) or `noteforge-data.enc` (encrypted), `window-state.json`, `ratelimit.json`, `noteforge-hint.txt`, `noteforge-config.json`, `noteforge-data.enc.pre-restore.bak` / `noteforge-data.json.pre-restore.bak` (after a restore, for rollback). A `*.tmp` file exists only for the moment a save is being written.
+Files: `noteforge-data.json` (unencrypted) or `noteforge-data.enc` (encrypted), `window-state.json`, `ratelimit.json`, `noteforge-hint.txt`, `noteforge-config.json`, `noteforge-data.enc.pre-restore.bak` / `noteforge-data.json.pre-restore.bak` (after a restore, for rollback), `noteforge-data.prev-1.enc` to `prev-3.enc` (the encrypted vault at each of the last 3 unlocks; removed when the master password changes or encryption is turned off). A `*.tmp` file exists only for the moment a save is being written.
 
 ## Keyboard Shortcuts
 

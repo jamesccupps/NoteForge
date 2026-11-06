@@ -139,6 +139,7 @@ function decryptWithSession(encJson) {
 function clearMasterKey() {
   zeroKey(masterKey);
   masterKey = null;
+  snapshotDue = false;
 }
 
 function lockSession() {
@@ -153,19 +154,51 @@ function lockSession() {
    power loss mid-write left a truncated file, and for the encrypted file that
    makes every note unrecoverable (GCM rejects the whole blob). Write a temp
    file, fsync it, then rename over the original. */
+// Windows refuses the rename while another process (antivirus, a sync client) has
+// the target open without delete sharing, which usually passes within a moment.
+// There is no fallback to writing in place: a crash mid-write would truncate the
+// only copy. If the rename keeps failing the old file stays, the save reports
+// failure and the renderer tries again.
+const RENAME_RETRY_MS = [15, 50, 150, 400];
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 function writeFileAtomic(file, data) {
   const tmp = file + ".tmp";
-  const fd = fs.openSync(tmp, "w");
-  try { fs.writeFileSync(fd, data, "utf-8"); fs.fsyncSync(fd); }
-  finally { fs.closeSync(fd); }
-  try { fs.renameSync(tmp, file); }
-  catch (e) {
-    // Windows refuses the rename while another process (AV scanner, sync client)
-    // has the target open without delete sharing. Fall back to the old in-place
-    // write rather than failing the save.
+  try {
+    const fd = fs.openSync(tmp, "w");
+    try { fs.writeFileSync(fd, data, "utf-8"); fs.fsyncSync(fd); }
+    finally { fs.closeSync(fd); }
+    for (let i = 0; ; i++) {
+      try { fs.renameSync(tmp, file); return; }
+      catch (e) {
+        if (i >= RENAME_RETRY_MS.length || !["EPERM", "EACCES", "EBUSY"].includes(e.code)) throw e;
+        sleepSync(RENAME_RETRY_MS[i]);
+      }
+    }
+  } catch (e) {
+    // (in unencrypted mode the temp file is a plaintext copy)
     try { fs.unlinkSync(tmp); } catch {}
-    fs.writeFileSync(file, data, "utf-8");
+    throw e;
   }
+}
+
+/* ── Earlier versions of the encrypted vault ────────────────
+   A copy of the file as it was at unlock, made before that session's first save:
+   the last PREV_KEEP sessions' starting points survive a bad save or a damaged
+   file. Named .enc so File → Restore from Backup opens them. They open with the
+   password in use when they were made, so a password change deletes them. */
+const PREV_KEEP = 3;
+const prevFile = (n) => path.join(userDataPath, `noteforge-data.prev-${n}.enc`);
+let snapshotDue = false; // set on unlock
+function snapshotVault() {
+  snapshotDue = false;
+  if (!fs.existsSync(encFile)) return;
+  try {
+    for (let n = PREV_KEEP; n > 1; n--) if (fs.existsSync(prevFile(n - 1))) fs.renameSync(prevFile(n - 1), prevFile(n));
+    fs.copyFileSync(encFile, prevFile(1));
+  } catch (e) { console.warn("[NoteForge] could not keep the previous version:", e.message); }
+}
+function deleteSnapshots() {
+  for (let n = 1; n <= PREV_KEEP + 1; n++) { try { fs.unlinkSync(prevFile(n)); } catch {} }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -406,6 +439,7 @@ function writeAppData(value, nbKeyIds) {
   const sealed = sealOpenNotebooks(value, nbKeyIds);
   value = stripLockedSections(sealed.value);
   if (masterKey) {
+    if (snapshotDue) snapshotVault();
     writeFileAtomic(encFile, encryptWithSession(value));
     if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
   } else {
@@ -437,8 +471,10 @@ ipcMain.handle("unlock-master", async (_e, password) => {
     // ones while the password is at hand. Now, not at the next save, because
     // storage-get reads the file back with the cached key.
     zeroKey(masterKey);
+    snapshotDue = true;
     if (result.isV1 || !isCurrentKdf(result.k)) {
       zeroKey(result.k);
+      snapshotVault(); // the file as it was, before the upgrade rewrites it
       const e = encryptData(result.plaintext, password);
       writeFileAtomic(encFile, e.blob);
       masterKey = e.k;
@@ -480,6 +516,7 @@ ipcMain.handle("disable-encryption", async (_e, password) => {
     writeFileAtomic(plainFile, sanitizeDataJson(result.plaintext));
     fs.unlinkSync(encFile);
     if (fs.existsSync(hintFile)) fs.unlinkSync(hintFile);
+    deleteSnapshots();
     // Only the master key: protected notebooks open in the renderer stay open, and
     // their next saves need their keys (dropping them lost their edits)
     clearMasterKey();
@@ -502,6 +539,7 @@ ipcMain.handle("change-master-password", async (_e, oldPassword, newPassword) =>
     // if it failed, saves encrypted under an all-zero key.
     const e = encryptData(sanitizeDataJson(result.plaintext), newPassword);
     writeFileAtomic(encFile, e.blob);
+    deleteSnapshots();
     zeroKey(masterKey);
     masterKey = e.k;
     recordMasterSuccess();

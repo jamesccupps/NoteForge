@@ -1032,6 +1032,36 @@ SCENARIOS.lockClosesDialogs = {
   },
 };
 
+// A save that can't be written (the file held by another program) shows as failed,
+// stays pending and is written once the file is free; closing meanwhile still flushes it.
+SCENARIOS.failedSaveIsRetried = {
+  seed: seedBase,
+  async run(c) {
+    const fs = require("fs");
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const realRename = fs.renameSync; // main.js shares this module
+    fs.renameSync = () => { const e = new Error("EPERM: operation not permitted, rename"); e.code = "EPERM"; throw e; };
+    const edit = (t) => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML="<p>${t}</p>";ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+    await edit("first edit");
+    await c.waitFor(`document.body.innerText.includes("Save failed")`, 5000).catch(() => {});
+    c.check("status shows Save failed", await c.js(`document.body.innerText.includes("Save failed")`));
+    c.check("file untouched while the rename is refused", c.readData().notebooks[0].sections[0].pages[0].content.includes("alpha body"));
+    fs.renameSync = realRename;
+    const d = await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes("first edit"), 8000);
+    c.check("written by the retry once the file is free", d.notebooks[0].sections[0].pages[0].content.includes("first edit"));
+    await c.waitFor(`document.body.innerText.includes("Saved")`, 3000).catch(() => {});
+    c.check("status back to Saved", await c.js(`document.body.innerText.includes("Saved")&&!document.body.innerText.includes("Save failed")`));
+
+    fs.renameSync = () => { const e = new Error("EPERM"); e.code = "EPERM"; throw e; };
+    await edit("second edit");
+    await c.sleep(2500); // the save fails; its retry is pending
+    fs.renameSync = realRename;
+    c.win.webContents.reload(); // the close flush
+    await c.sleep(800);
+    c.check("closing with a failed save pending still writes it", c.readData().notebooks[0].sections[0].pages[0].content.includes("second edit"));
+  },
+};
+
 // Two windows on one data folder each rewrite the whole vault from their own memory.
 // Starts a second app process on this scenario's folder: it must quit without a window
 // and hand over to the first.

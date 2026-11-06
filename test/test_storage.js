@@ -133,16 +133,69 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
     h.cleanup();
   }
   {
-    // Rename refused (target held open on Windows): fall back to in-place write.
+    // Rename refused (target held open on Windows, e.g. by antivirus). Never overwrite
+    // the file in place: a crash mid-write would truncate the only copy.
     const fs = require("fs");
     const h = loadMain();
     h.write("noteforge-data.json", "old");
     const realRename = fs.renameSync;
-    fs.renameSync = () => { const e = new Error("EPERM: operation not permitted, rename"); e.code = "EPERM"; throw e; };
-    const r = await h.invoke("storage-set", DATA);
-    fs.renameSync = realRename;
-    t("save succeeds when rename is refused", r.ok === true && h.read("noteforge-data.json") === DATA);
-    t("temp file cleaned up after fallback", !h.exists("noteforge-data.json.tmp"));
+    let refusals = 0;
+    const refuse = (n) => { refusals = 0; fs.renameSync = (a, b) => {
+      if (refusals++ < n) { const e = new Error("EPERM: operation not permitted, rename"); e.code = "EPERM"; throw e; }
+      return realRename(a, b);
+    }; };
+    refuse(2);
+    const r1 = await h.invoke("storage-set", DATA);
+    t("a briefly refused rename is retried", r1.ok === true && h.read("noteforge-data.json") === DATA, JSON.stringify(r1));
+    h.write("noteforge-data.json", "old");
+    const realWrite = fs.writeFileSync;
+    let inPlace = false;
+    fs.writeFileSync = (p, ...a) => { if (p === h.file("noteforge-data.json")) inPlace = true; return realWrite(p, ...a); };
+    refuse(1000);
+    const t0 = Date.now();
+    const r2 = await h.invoke("storage-set", DATA);
+    fs.renameSync = realRename; fs.writeFileSync = realWrite;
+    t("a rename that keeps failing fails the save", r2.ok === false, JSON.stringify(r2));
+    t("...without writing over the file in place", !inPlace && h.read("noteforge-data.json") === "old");
+    t("...and within about a second", Date.now() - t0 < 2000, `${Date.now() - t0} ms`);
+    t("temp file cleaned up", !h.exists("noteforge-data.json.tmp"));
+    h.cleanup();
+  }
+  {
+    // A failed write must not leave its temp file (plaintext in unencrypted mode)
+    const fs = require("fs");
+    const h = loadMain();
+    const realFsync = fs.fsyncSync;
+    fs.fsyncSync = () => { throw new Error("simulated disk error"); };
+    await h.invoke("storage-set", DATA);
+    fs.fsyncSync = realFsync;
+    t("temp file removed after a failed write", !h.exists("noteforge-data.json.tmp"));
+    h.cleanup();
+  }
+
+  section("Earlier versions of the encrypted vault");
+  {
+    const v = (n) => `noteforge-data.prev-${n}.enc`;
+    const h = loadMain();
+    h.write("noteforge-data.json", DATA);
+    await h.invoke("enable-encryption", PW, "");
+    const atUnlock = [];
+    let cur = h;
+    for (let session = 1; session <= 4; session++) {
+      cur = cur.restart();
+      await cur.invoke("unlock-master", PW);
+      atUnlock.push(cur.read("noteforge-data.enc"));
+      await cur.invoke("storage-set", DATA.replace('"N"', `"N${session}"`));
+      await cur.invoke("storage-set", DATA.replace('"N"', `"N${session}b"`));
+    }
+    t("one copy per unlock, taken before its first save", cur.read(v(1)) === atUnlock[3] && cur.read(v(2)) === atUnlock[2] && cur.read(v(3)) === atUnlock[1]);
+    t("three kept", !cur.exists(v(4)));
+    t("copies are .enc files Restore can open (v2 header)", JSON.parse(cur.read(v(1))).v === 2);
+    await cur.invoke("change-master-password", PW, PW + "x");
+    t("change password removes copies the old password opens", ![1, 2, 3].some((n) => cur.exists(v(n))));
+    await cur.restart().invoke("unlock-master", PW + "x");
+    await cur.invoke("disable-encryption", PW + "x");
+    t("none kept in unencrypted mode", ![1, 2, 3].some((n) => cur.exists(v(n))));
     h.cleanup();
   }
 

@@ -4,6 +4,7 @@ const {useState,useEffect,useRef,useCallback,useMemo}=React;
    CONSTANTS
    ═══════════════════════════════════════════════════════════════ */
 const SCHEMA_VERSION=1; // bump if notebook/section/page shape changes; used for safe migrations
+const SAVE_RETRY_MS=3000; // after a save that wasn't written
 const NB_COLORS=["#7c6ef0","#e05a9f","#e89020","#1cb888","#3b82f6","#9061e0","#e54545","#14b8a6","#d96830","#64748b"];
 const FONT_SIZES=[{l:"10",v:"1"},{l:"12",v:"2"},{l:"14",v:"3"},{l:"16",v:"4"},{l:"18",v:"5"},{l:"24",v:"6"},{l:"32",v:"7"}];
 const HEADINGS=[{l:"Normal",v:"div"},{l:"H1",v:"h1"},{l:"H2",v:"h2"},{l:"H3",v:"h3"},{l:"H4",v:"h4"}];
@@ -572,6 +573,11 @@ function NoteForge(){
       dataRef.current=nd;setData(nd);
     }
     setSaved(true);setSaveFailed(!r.ok||!!r.unsealed?.length);
+    // Not written (e.g. the file was held by another program): keep the save pending,
+    // so it is tried again and Lock and close still flush it
+    if(!r.ok&&dataRef.current&&!saveTimer.current){
+      saveTimer.current=setTimeout(()=>{saveTimer.current=null;if(dataRef.current)saveNow(dataRef.current)},SAVE_RETRY_MS);
+    }
     return r;
   },[]);
 

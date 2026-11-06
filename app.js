@@ -10,6 +10,7 @@ const {
    CONSTANTS
    ═══════════════════════════════════════════════════════════════ */
 const SCHEMA_VERSION = 1; // bump if notebook/section/page shape changes; used for safe migrations
+const SAVE_RETRY_MS = 3000; // after a save that wasn't written
 const NB_COLORS = ["#7c6ef0", "#e05a9f", "#e89020", "#1cb888", "#3b82f6", "#9061e0", "#e54545", "#14b8a6", "#d96830", "#64748b"];
 const FONT_SIZES = [{
   l: "10",
@@ -1452,6 +1453,14 @@ function NoteForge() {
     }
     setSaved(true);
     setSaveFailed(!r.ok || !!r.unsealed?.length);
+    // Not written (e.g. the file was held by another program): keep the save pending,
+    // so it is tried again and Lock and close still flush it
+    if (!r.ok && dataRef.current && !saveTimer.current) {
+      saveTimer.current = setTimeout(() => {
+        saveTimer.current = null;
+        if (dataRef.current) saveNow(dataRef.current);
+      }, SAVE_RETRY_MS);
+    }
     return r;
   }, []);
 
