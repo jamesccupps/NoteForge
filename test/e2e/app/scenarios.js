@@ -1443,4 +1443,7 @@ SCENARIOS.secondInstanceProbe = {
   async run(c) { c.check("second instance opened a window", true); },
 };
 
+// Website / README screenshots from sample notes (node test/e2e/run.js screenshots)
+SCENARIOS.screenshots = require("./screenshots");
+
 module.exports = { SCENARIOS, R, NB_PW, seedBase, seedLocked, unlockNotebook };

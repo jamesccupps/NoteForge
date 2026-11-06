@@ -1,13 +1,18 @@
 # Screenshots
 
-This directory holds screenshots referenced by the main README.
+Screenshots for the README and the website (`site/`, published by `.github/workflows/pages.yml`), committed so the links stay stable.
 
-Screenshots are committed into the repo (not hosted on GitHub's attachments CDN) so image links stay stable across repo moves, forks, and time. Drop new PNG or JPG files here and reference them with repo-relative paths:
+They're made from made-up sample notes, never real data, by a scenario on the end-to-end harness (a throwaway data folder, like the tests):
 
-```markdown
-![NoteForge](docs/screenshots/main-window.png)
 ```
+node test/e2e/run.js screenshots
+```
+
+The script is `test/e2e/app/screenshots.js`.
 
 ## Current files
 
-- `main-window.png` — the main app window showing notebooks, sections, pages, and the rich-text editor.
+- `noteforge-dark.png`: the main window in the dark theme (a note with a checklist, a table, a highlight and a code block).
+- `noteforge-light.png`: the main window in the light theme (a recipe with lists and a quote).
+- `noteforge-notebook-lock.png`: the Unlock Notebook dialog.
+- `social-preview.png`: 1280x640 card for the repository's Settings → Social preview (uploaded by hand) and the website's link preview.

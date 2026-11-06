@@ -87,7 +87,11 @@ function makeCtx(win) {
   };
 }
 
+// The scenario drives the app's window, the first one created (a scenario may open others)
+let appWindow = null;
 app.on("browser-window-created", (_e, win) => {
+  if (appWindow) return;
+  appWindow = win;
   win.webContents.on("console-message", (e, level, message) => {
     const lvl = e.level ?? level, msg = e.message ?? message;
     if (lvl === 3 || lvl === "error") out.consoleErrors.push(msg);
