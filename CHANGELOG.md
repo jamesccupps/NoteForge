@@ -5,6 +5,56 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+## [2.9.0] — 2026-11-06
+
+Fixes from an outside review of 2.8.2. Each bug was reproduced first, and each has a test that fails on 2.8.2.
+
+### Fixed — data loss
+- **Edits in a password-protected notebook were lost** on Re-lock Now, on Lock (Ctrl+L or auto-lock) and on closing the app. Every edit since unlocking went, while the status bar said "Saved". This dates back to 2.5.0. The main process now encrypts open protected notebooks on every save, whichever path saves.
+- **Remove Encryption dropped later edits** to protected notebooks that were open, still showing "Saved".
+- **Restore left protected notebooks looking unlocked**, and empty. Remove Password on one then wiped its pages.
+- **Dialogs survived a lock.** Confirming one after unlocking wrote the data from before the lock, and showed protected notebooks without their password.
+- **Two copies of NoteForge** (opened twice, or the installed and portable builds together) each rewrote the whole vault, so the last save won. Only one instance runs per data folder now; a second launch focuses the first.
+- **A vault or notebook saved with non-default scrypt settings** opened once and then said "Wrong password" for good, because saves wrote the default settings. Each key now keeps the settings it was made with, and older files are upgraded on unlock.
+- **When Windows refused the save's rename** (antivirus or a sync client holding the file), NoteForge overwrote the vault in place. A crash at that moment would have lost every note. It now retries, and otherwise reports "Save failed" and tries again, without touching the old file.
+- **Pasting a large image, then switching page**, put the image on the new page and saved it over the old one.
+
+### Added
+- **Earlier versions.** With encryption on, the vault as it was at each of the last 3 unlocks is kept (`noteforge-data.prev-1.enc` is the newest). Restore from Backup opens them.
+- **First-run offer.** On first run NoteForge offers to set a master password (Skip is fine), instead of saving notes as plain text until someone found the setting.
+- **Match case** in Find & Replace.
+- **Restore from Backup on the lock screen**, offered when the vault is damaged.
+
+### Changed
+- **Portable build:**
+  - It keeps its notes in a `NoteForge Data` folder next to the exe, not in the PC's `%APPDATA%`. On first run it offers to copy notes it finds on the PC.
+  - It no longer installs updates itself (that set up a separate installed copy): it opens the download page.
+- **Errors say what happened.** A damaged data file or a disk error is no longer reported as "Wrong password", and it no longer counts toward the lockout.
+- **Replace All can be undone** (one match per Ctrl+Z).
+- **Insert Link:**
+  - It puts the link at the caret, and wraps the selected text. Before, it went at the start of the note.
+  - Links are web or email addresses only; a bare `example.com` becomes `https://example.com`.
+- **Dropping text or HTML from other programs** goes through the paste path, so it's sanitized.
+- **A restore without a hint file** removes the old password's hint.
+- **Deleting a still-locked notebook** now says that its protected pages go with it.
+- **A data file with missing parts** (from a restore or hand editing) opens instead of leaving a blank window. Render errors show a recovery screen.
+
+### Security
+- **Notes can't imitate the app.** The app's own CSS classes, fixed positioning and every `<input>` other than checkboxes are removed from note content. Before, a note could draw a fake lock screen over the window.
+- **Enable Encryption refuses to run over an existing vault.** Called directly, it could wipe a locked vault, or re-key an unlocked one without the current password. The unused `set-hint` IPC is removed.
+- **Encryption details:**
+  - GCM tags must be the full 16 bytes.
+  - Notebook unlock attempts are rate-limited by the notebook's salt. The count used to reset after every save.
+  - scrypt's memory limit now allows the documented range.
+- **Plaintext leftovers removed.** Turning encryption on removes leftover plaintext copies (`.tmp`, `.pre-restore.bak`).
+- **CSP:** `base-uri 'none'` and `form-action 'none'` added. Exported HTML carries its own CSP.
+- **DevTools** are disabled in packaged builds.
+- **Dependencies:** Electron 44.10.2 (eMudhra certificate mitigation), DOMPurify 3.4.17, electron-updater 6.8.11 (js-yaml 4.3.2).
+- **CI:**
+  - The release job no longer keeps its write token in `.git/config`.
+  - It checks that the tag matches `package.json`.
+  - The fuses are read back from the built exe before publishing.
+
 ## [2.8.2] — 2026-10-08
 
 Re-release of 2.8.1 with the same app code. The 2.8.1 GitHub release lost its installer: electron-builder 26 split it across two releases, and cleaning up the duplicate removed the wrong one.

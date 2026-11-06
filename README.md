@@ -10,7 +10,7 @@
 - **Fully offline** — All fonts, scripts, and dependencies bundled locally. The only network request is an optional update check against GitHub Releases on launch
 - **Rich text editor** — Bold, italic, headings, lists, tables, code blocks, links, images, checklists
 - **Image auto-downscale** — Pasted photos are automatically resized to 1600px and JPEG-compressed
-- **Find & Replace** — Highlights every match with a live count; Enter / Shift+Enter step through them; replace one or all
+- **Find & Replace** — Highlights every match with a live count; Enter / Shift+Enter step through them; match case; replace one or all (undoable)
 - **Auto-lock** — Configurable idle timeout (5/15/30/60 min) + Ctrl+L manual lock + per-notebook "Re-lock Now"
 - **Encrypted backup** — Export/restore `.enc` backup files. Restore checks the backup password before touching anything and keeps a rollback copy of your current notes
 - **Crash-safe saves** — The data file is written to a temp file, flushed, and renamed into place, so a crash mid-save can't truncate it. If another program holds the file, the save is retried rather than written in place
@@ -21,15 +21,32 @@
 - **Keyboard shortcuts help** — Press F1 for a list of every shortcut
 - **Sandboxed renderer** — Chromium OS-level process sandbox enabled by default
 - **Content Security Policy** — `connect-src 'none'`, `script-src 'self'`, `img-src data:` — no eval, no outbound connections, no remote or UNC images
-- **DOMPurify + hardening hook** — All note content sanitized on load and paste; `<input>` types restricted to `checkbox` only to block in-note phishing; images limited to inline `data:` images
+- **DOMPurify + hardening hook** — All note content sanitized on load, paste and drop; inputs other than checkboxes, the app's own CSS classes and fixed positioning are removed so a note can't imitate the app; images limited to inline `data:` images; links to web and email addresses
 
-## Screenshot
+## Screenshots
 
-![NoteForge](docs/screenshots/main-window.png)
+![NoteForge in the dark theme](docs/screenshots/noteforge-dark.png)
+
+![NoteForge in the light theme](docs/screenshots/noteforge-light.png)
 
 ## What's new
 
 Full history is in [CHANGELOG.md](CHANGELOG.md).
+
+**2.9.0 (review fixes):**
+- **Data loss fixed:**
+  - Edits in a password-protected notebook are no longer lost on Re-lock, Lock or close (a bug since 2.5.0).
+  - Two copies of NoteForge can no longer overwrite each other.
+  - Saves never overwrite the vault in place.
+  - Non-default encryption settings no longer lock you out after a save.
+  - A slow image paste can't land on another page.
+- **New:**
+  - The last 3 versions of the encrypted vault are kept.
+  - First run offers a master password.
+  - Find & Replace gains Match case, and Replace All can be undone.
+  - A damaged vault offers Restore on the lock screen.
+- **Portable:** notes live next to the exe.
+- **Security:** notes can't imitate the app, tighter checks around encryption and the IPC, a stricter CSP, and DevTools off in packaged builds. Electron 44.10.2 and DOMPurify 3.4.17.
 
 **2.8.2 / 2.8.1 (editor and UI pass):** 2.8.2 republishes 2.8.1, whose release lost its installer.
 - **Now works:** checklist ticks are saved, Find & Replace works, and printing gives just the note.
@@ -70,7 +87,7 @@ Full history is in [CHANGELOG.md](CHANGELOG.md).
 
 Download the latest installer from [Releases](../../releases):
 
-- **`NoteForge Setup x.x.x.exe`** — Standard Windows installer (recommended)
+- **`NoteForge-Setup-x.x.x.exe`** — Standard Windows installer (recommended)
 - **`NoteForge-x.x.x-portable.exe`** — Portable version, no install needed. It keeps its notes in a `NoteForge Data` folder next to the exe, so they travel with it (from 2.9.0; on first run it offers to copy notes found on the PC). It doesn't update itself: when a new version is out it opens the download page, and the new exe goes in the same folder
 
 Releases are built automatically by GitHub Actions — no manual build steps required.
