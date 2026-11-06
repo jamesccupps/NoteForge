@@ -152,7 +152,8 @@ SCENARIOS.saveFailureShown = {
     const status = () => c.js(`[...document.querySelectorAll(".nf-status span")].map(s=>s.textContent).find(t=>/Save/.test(t))`);
     fs.chmodSync(c.file("noteforge-data.json"), 0o444); // read-only: the write will fail
     await edit("cannot be saved");
-    await c.sleep(1000);
+    // (the rename is retried for about 0.6 s before the save gives up)
+    await c.waitFor(`[...document.querySelectorAll(".nf-status span")].some(s=>s.textContent==="Save failed")`, 4000).catch(() => {});
     c.check("failed write shows 'Save failed'", (await status()) === "Save failed", await status());
     fs.chmodSync(c.file("noteforge-data.json"), 0o644);
     await edit("saved now");
