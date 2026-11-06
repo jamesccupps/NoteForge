@@ -1100,6 +1100,21 @@ SCENARIOS.malformedDataStillOpens = {
   },
 };
 
+// Deleting a still-locked notebook must say what goes with it
+SCENARIOS.deleteLockedNotebookWarns = {
+  seed: seedLocked,
+  async run(c) {
+    await c.waitFor(R.nb("Locked"));
+    await c.js(R.rightClick(R.nb("Locked")));
+    await c.sleep(200);
+    await c.js(`${R.ctxItem("Delete Notebook")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-modal")`);
+    const msg = await c.js(`document.querySelector(".nf-modal").innerText`);
+    c.check("confirm names the protected pages and says it can't be undone", /password-protected pages/.test(msg) && /cannot be undone/.test(msg), msg);
+    await c.js(`${R.button(".nf-modal-btn", "Cancel")}.click()`);
+  },
+};
+
 // Last line of defence: a render error shows a recovery screen, not a blank window
 SCENARIOS.errorBoundary = {
   seed: seedBase,

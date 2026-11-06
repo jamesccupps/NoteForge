@@ -1196,7 +1196,11 @@ function NoteForge(){
     const pc=nb?(nb.sections||[]).reduce((a,s)=>a+s.pages.length,0):0;
     const ok=await confirm({
       title:"Delete Notebook",
-      message:pc>0?`Delete "${nb.name}" and all ${pc} pages? This cannot be undone.`:`Delete "${nb?.name}"?`,
+      // A still-locked notebook shows no pages (they're inside its encrypted blob), so it
+      // used to read like an empty one: just `Delete "X"?`
+      message:pc>0?`Delete "${nb.name}" and all ${pc} pages? This cannot be undone.`
+        :nb?.locked&&nb.encSections?`Delete "${nb.name}" and all its password-protected pages? This cannot be undone.`
+        :`Delete "${nb?.name}"?`,
       confirmLabel:"Delete",confirmStyle:"danger",
     });
     const cur=dataRef.current;if(!ok||!cur)return;
