@@ -318,6 +318,28 @@ const DATA = JSON.stringify({ notebooks: [{ id: "nb1", name: "Test", sections: [
     h.cleanup();
   }
 
+  section("GCM tag and notebook rate-limit identity");
+  {
+    const h = loadMain();
+    const hdr = JSON.parse(makeBlob(DATA, PW));
+    h.write("noteforge-data.enc", JSON.stringify({ ...hdr, tag: hdr.tag.slice(0, 8) })); // the real tag, cut to 4 bytes
+    t("truncated GCM tag rejected", !(await h.invoke("unlock-master", PW)).success);
+    h.cleanup();
+  }
+  {
+    // Keyed on the notebook's salt bytes: re-spelling the hex (case) or a new IV from
+    // a save used to give a fresh counter
+    const h = loadMain();
+    const blob = makeBlob("[]", PW);
+    const o = JSON.parse(blob);
+    for (let i = 0; i < 5; i++) await h.invoke("decrypt-notebook-sections", blob, "wrong-" + i);
+    const upper = JSON.stringify({ ...o, salt: o.salt.toUpperCase() });
+    t("same salt spelled in upper case: still rate-limited", /Too many failed attempts/.test((await h.invoke("decrypt-notebook-sections", upper, PW)).error || ""));
+    const newIv = makeBlob("[]", PW, { header: { salt: o.salt } }); // same salt, new IV (as after a save)
+    t("same notebook after a save (new IV): still rate-limited", /Too many failed attempts/.test((await h.invoke("decrypt-notebook-sections", newIv, PW)).error || ""));
+    h.cleanup();
+  }
+
   section("Password strength (real WEAK_PASSWORDS list)");
   {
     const h = loadMain();

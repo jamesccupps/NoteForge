@@ -107,7 +107,8 @@ function decryptData(encJson, password) {
   }
   const k = deriveKey(password, Buffer.from(obj.salt, "hex"), { N, r, p });
   try {
-    const decipher = crypto.createDecipheriv(ALGO, k.key, Buffer.from(obj.iv, "hex"));
+    // authTagLength: without it Node accepts a GCM tag cut down to 4 bytes
+    const decipher = crypto.createDecipheriv(ALGO, k.key, Buffer.from(obj.iv, "hex"), { authTagLength: 16 });
     decipher.setAuthTag(Buffer.from(obj.tag, "hex"));
     let dec = decipher.update(obj.data, "base64", "utf-8");
     dec += decipher.final("utf-8");
@@ -135,7 +136,7 @@ function encryptWithSession(plaintext) {
 function decryptWithSession(encJson) {
   if (!masterKey) throw new Error("No session key");
   const obj = JSON.parse(encJson);
-  const decipher = crypto.createDecipheriv(ALGO, masterKey.key, Buffer.from(obj.iv, "hex"));
+  const decipher = crypto.createDecipheriv(ALGO, masterKey.key, Buffer.from(obj.iv, "hex"), { authTagLength: 16 });
   decipher.setAuthTag(Buffer.from(obj.tag, "hex"));
   let dec = decipher.update(obj.data, "base64", "utf-8");
   dec += decipher.final("utf-8");
@@ -288,11 +289,12 @@ const MAX_ATTEMPTS = 5;
 const BASE_DELAY_MS = 1000;
 
 function nbKeyFromBlob(blob) {
-  // Derive stable per-notebook-password identifier from the encrypted blob's
-  // salt+iv. Rotates automatically when the user changes the notebook password.
+  // The notebook's identity for rate limiting: its salt bytes, which change only with
+  // its password. Hashing the salt+iv hex text gave the same notebook a fresh counter
+  // after every save (new IV) and for the same hex spelled in upper case.
   try {
-    const obj = JSON.parse(blob);
-    return crypto.createHash("sha256").update((obj.salt||"")+(obj.iv||"")).digest("hex").slice(0,32);
+    const salt = Buffer.from(String(JSON.parse(blob).salt), "hex");
+    return crypto.createHash("sha256").update(salt).digest("hex").slice(0, 32);
   } catch { return "invalid"; }
 }
 

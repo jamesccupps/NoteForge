@@ -51,7 +51,7 @@ Only the latest release (currently the 2.x line) receives security updates. Olde
 | Accepted r / p on decrypt | r 8–32, p 1–16, integers only (written as r=8, p=1) |
 | Key length | 32 bytes |
 | IV / nonce | 16 bytes, random per encryption (GCM derives J0 from a non-96-bit IV via GHASH) |
-| Auth tag | 16 bytes, GCM-native |
+| Auth tag | 16 bytes, GCM-native; shorter tags are rejected (`authTagLength: 16`) |
 | Backup file version | `v=2` (v1 legacy format not accepted) |
 
 If you think any of these values is wrong for the threat model, I want to hear about it.
