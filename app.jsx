@@ -1412,11 +1412,20 @@ function NoteForge(){
     const sel=window.getSelection();
     const selText=sel?.toString()||"";
     const onPage=prevPgRef.current;
+    // The prompt takes focus, and focusing the editor again put the caret at the start
+    // of the note: keep the selection (or caret) to put back
+    const saved=sel.rangeCount&&edRef.current?.contains(sel.anchorNode)?sel.getRangeAt(0).cloneRange():null;
     const url=await promptUser({title:"Insert Link",message:selText?`Link URL for "${selText.slice(0,40)}"`:"Enter URL",placeholder:"https://example.com",defaultValue:"https://"});
     if(!url||!url.trim()||url.trim()==="https://")return;
     if(prevPgRef.current!==onPage)return; // another page was opened while the prompt was up
-    const safe=escHtml(url.trim());
-    const text=escHtml(selText||url.trim());
+    // Web and email links only; a bare "example.com" was a relative path into the app's folder
+    const raw=url.trim();
+    const href=/^[a-z][a-z0-9+.-]*:/i.test(raw)?raw:"https://"+raw;
+    if(!/^(https?:\/\/|mailto:)/i.test(href)){alertUser({title:"Link not added",message:"A link can be a web address (http, https) or an email address (mailto)."});return}
+    const safe=escHtml(href);
+    const text=escHtml(selText||raw);
+    edRef.current?.focus();
+    if(saved){sel.removeAllRanges();sel.addRange(saved)}
     exec("insertHTML",`<a href="${safe}" title="${safe}" target="_blank" rel="noopener noreferrer">${text}</a>`);
   };
 

@@ -1028,6 +1028,40 @@ SCENARIOS.noteCantSpoofApp = {
   },
 };
 
+// Insert Link: web and email only; a bare host gets https://
+SCENARIOS.insertLinkSchemes = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    const addLink = async (url) => {
+      await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const r=document.createRange();r.selectNodeContents(ed);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r)})()`);
+      await c.js(`document.querySelector('button[title="Link"]').click()`);
+      await c.waitFor(`document.querySelector(".nf-modal input")`);
+      await c.js(R.type(`document.querySelector(".nf-modal input")`, url));
+      await c.js(`${R.button(".nf-modal-btn", "OK")}.click()`);
+      await c.sleep(300);
+    };
+    await addLink("javascript:alert(1)");
+    c.check("javascript: link refused", !(await c.js(`!!document.querySelector('.nf-editor a[href^="javascript"]')`)));
+    c.check("...with a message", (await c.js(`document.querySelector(".nf-modal")?.innerText||""`)).includes("mailto"));
+    await c.js(`${R.button(".nf-modal-btn", "OK")}.click()`).catch(() => {});
+    await c.sleep(200);
+    await addLink("example.com");
+    c.check("bare host becomes an https link", await c.js(`!!document.querySelector('.nf-editor a[href="https://example.com"]')`),
+      await c.js(`document.querySelector(".nf-editor").innerHTML`));
+    c.check("link goes where the caret was (end of the note)", /alpha body\s*example\.com$/.test(await c.js(R.editorText)), await c.js(R.editorText));
+    // A selected word becomes the link text
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const t=ed.querySelector("p").firstChild;const r=document.createRange();r.setStart(t,0);r.setEnd(t,5);const s=getSelection();s.removeAllRanges();s.addRange(r)})()`);
+    await c.js(`document.querySelector('button[title="Link"]').click()`);
+    await c.waitFor(`document.querySelector(".nf-modal input")`);
+    await c.js(R.type(`document.querySelector(".nf-modal input")`, "https://alpha.example"));
+    await c.js(`${R.button(".nf-modal-btn", "OK")}.click()`);
+    await c.sleep(300);
+    c.check("selected text becomes the link", (await c.js(`document.querySelector('.nf-editor a[href="https://alpha.example"]')?.textContent`)) === "alpha",
+      await c.js(`document.querySelector(".nf-editor").innerHTML`));
+  },
+};
+
 // Dropping content from another program goes through the paste path: plain text, or
 // sanitized HTML. Chromium's own drop insert keeps forms and inputs.
 SCENARIOS.dropUsesPastePath = {
