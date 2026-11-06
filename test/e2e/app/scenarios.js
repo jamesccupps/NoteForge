@@ -1033,6 +1033,41 @@ SCENARIOS.lockClosesDialogs = {
   },
 };
 
+// First run (no data yet): offer a master password, once, with Skip
+SCENARIOS.firstRunSkip = {
+  async run(c) {
+    const fs = require("fs");
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Protect your notes?"`);
+    c.check("first run offers a master password", true);
+    await c.js(`${R.button(".nf-overlay-btn", "Skip")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    c.check("Skip opens the app unencrypted", !fs.existsSync(c.file("noteforge-data.enc")));
+    c.win.webContents.reload();
+    await c.sleep(1500);
+    c.check("asked only once", !(await c.js(`document.querySelector(".nf-overlay-title")?.textContent==="Protect your notes?"`)) &&
+      (await c.js(`!!document.querySelector(".nf-editor")`)));
+  },
+};
+SCENARIOS.firstRunEncrypt = {
+  async run(c) {
+    const fs = require("fs");
+    const MPW = "Master!Passw0rd-e2e";
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Protect your notes?"`);
+    await c.js(R.type(`document.querySelectorAll(".nf-overlay-input")[0]`, MPW));
+    await c.js(R.type(`document.querySelectorAll(".nf-overlay-input")[1]`, MPW));
+    await c.waitFor(`!${R.button(".nf-overlay-btn", "Encrypt")}.disabled`, 4000).catch(() => {});
+    await c.js(`${R.button(".nf-overlay-btn", "Encrypt")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    c.check("encrypted from the first run", fs.existsSync(c.file("noteforge-data.enc")) && !fs.existsSync(c.file("noteforge-data.json")));
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML="<p>first note</p>";ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+    await c.sleep(1200);
+    c.check("notes saved encrypted, no plaintext file", !fs.existsSync(c.file("noteforge-data.json")) && !fs.readFileSync(c.file("noteforge-data.enc"), "utf-8").includes("first note"));
+    c.win.webContents.reload();
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Unlock NoteForge"`);
+    c.check("next launch asks for the master password", true);
+  },
+};
+
 // A damaged vault: the lock screen says so (not "Wrong password") and offers Restore,
 // which used to be unreachable while locked.
 SCENARIOS.damagedVaultOffersRestore = {

@@ -11,6 +11,16 @@ const {
    ═══════════════════════════════════════════════════════════════ */
 const SCHEMA_VERSION = 1; // bump if notebook/section/page shape changes; used for safe migrations
 const SAVE_RETRY_MS = 3000; // after a save that wasn't written
+// Set once the first-run master password offer was answered (its own key: the prefs
+// object is rewritten whole by the prefs effect)
+const FIRST_RUN_KEY = "noteforge-encryption-offered";
+const firstRunDone = () => {
+  try {
+    return localStorage.getItem(FIRST_RUN_KEY) === "1";
+  } catch {
+    return true;
+  }
+};
 const NB_COLORS = ["#7c6ef0", "#e05a9f", "#e89020", "#1cb888", "#3b82f6", "#9061e0", "#e54545", "#14b8a6", "#d96830", "#64748b"];
 const FONT_SIZES = [{
   l: "10",
@@ -1156,6 +1166,7 @@ function PasswordDialog({
   onSubmit,
   onCancel,
   confirmLabel,
+  cancelLabel,
   error,
   showConfirm,
   showHint,
@@ -1358,7 +1369,7 @@ function PasswordDialog({
   }, confirmLabel || "Unlock"), onCancel && /*#__PURE__*/React.createElement("button", {
     className: "nf-overlay-btn secondary",
     onClick: onCancel
-  }, "Cancel")));
+  }, cancelLabel || "Cancel")));
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1672,6 +1683,11 @@ function NoteForge() {
         if (status.hint) setMasterHint(status.hint);
         if (status.encrypted) {
           setAppPhase("needsPassword");
+          return;
+        }
+        // First run: offer a master password before anything is written in plain text
+        if (!status.hasData && !firstRunDone()) {
+          setAppPhase("offerEncryption");
           return;
         }
       }
@@ -2923,6 +2939,38 @@ function NoteForge() {
     }
   });
 
+  // First run (no data file yet), asked once: notes are plain text on disk until a
+  // master password is set, and most people never open Settings to find that out.
+  const finishFirstRun = () => {
+    try {
+      localStorage.setItem(FIRST_RUN_KEY, "1");
+    } catch {}
+    setPwError("");
+    loadIntoState(structuredClone(DEFAULT_DATA));
+  };
+  if (appPhase === "offerEncryption") return /*#__PURE__*/React.createElement(PasswordDialog, {
+    dark: dark,
+    title: "Protect your notes?",
+    subtitle: "Set a master password and NoteForge encrypts your notes on disk; without one they are saved as plain text. There's no recovery if you forget it. You can also do this later in Settings.",
+    confirmLabel: "Encrypt",
+    cancelLabel: "Skip",
+    showConfirm: true,
+    showHint: true,
+    error: pwError,
+    onCancel: finishFirstRun,
+    onSubmit: async (pw, hint) => {
+      setPwError("");
+      const r = await window.electronAPI.enableEncryption(pw, hint);
+      if (r.error) {
+        setPwError(r.error);
+        return;
+      }
+      setEncEnabled(true);
+      if (hint) setMasterHint(hint);
+      finishFirstRun();
+    }
+  });
+
   // Loading
   if (appPhase === "loading") return /*#__PURE__*/React.createElement("div", {
     className: "nf-overlay",
@@ -3134,7 +3182,7 @@ function NoteForge() {
   }, "Close"))), pwDialog?.type === "enable-enc" && /*#__PURE__*/React.createElement(PasswordDialog, {
     dark: dark,
     title: "Enable Encryption",
-    subtitle: "Choose a master password. Don't forget it \u2014 there's no recovery.",
+    subtitle: "Choose a master password. Don't forget it \u2014 there's no recovery. Notes saved before this were plain text: copies can remain in backups such as File History or a sync folder.",
     confirmLabel: "Encrypt",
     showConfirm: true,
     showHint: true,

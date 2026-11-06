@@ -5,6 +5,10 @@ const {useState,useEffect,useRef,useCallback,useMemo}=React;
    ═══════════════════════════════════════════════════════════════ */
 const SCHEMA_VERSION=1; // bump if notebook/section/page shape changes; used for safe migrations
 const SAVE_RETRY_MS=3000; // after a save that wasn't written
+// Set once the first-run master password offer was answered (its own key: the prefs
+// object is rewritten whole by the prefs effect)
+const FIRST_RUN_KEY="noteforge-encryption-offered";
+const firstRunDone=()=>{try{return localStorage.getItem(FIRST_RUN_KEY)==="1"}catch{return true}};
 const NB_COLORS=["#7c6ef0","#e05a9f","#e89020","#1cb888","#3b82f6","#9061e0","#e54545","#14b8a6","#d96830","#64748b"];
 const FONT_SIZES=[{l:"10",v:"1"},{l:"12",v:"2"},{l:"14",v:"3"},{l:"16",v:"4"},{l:"18",v:"5"},{l:"24",v:"6"},{l:"32",v:"7"}];
 const HEADINGS=[{l:"Normal",v:"div"},{l:"H1",v:"h1"},{l:"H2",v:"h2"},{l:"H3",v:"h3"},{l:"H4",v:"h4"}];
@@ -416,7 +420,7 @@ function RenameInput({id,initialValue,onRename,onCancel}){
 /* ═══════════════════════════════════════════════════════════════
    PASSWORD DIALOG (reusable overlay)
    ═══════════════════════════════════════════════════════════════ */
-function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,error,showConfirm,showHint,children,dark}){
+function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,cancelLabel,error,showConfirm,showHint,children,dark}){
   const [pw,setPw]=useState("");
   const [pw2,setPw2]=useState("");
   const [hint,setHint]=useState("");
@@ -494,7 +498,7 @@ function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,error,sho
         disabled={showConfirm&&(!allMet||pw!==pw2)}>
         {confirmLabel||"Unlock"}
       </button>
-      {onCancel&&<button className="nf-overlay-btn secondary" onClick={onCancel}>Cancel</button>}
+      {onCancel&&<button className="nf-overlay-btn secondary" onClick={onCancel}>{cancelLabel||"Cancel"}</button>}
     </div>
   </div>;
 }
@@ -724,6 +728,8 @@ function NoteForge(){
         setEncEnabled(status.encrypted);
         if(status.hint)setMasterHint(status.hint);
         if(status.encrypted){setAppPhase("needsPassword");return}
+        // First run: offer a master password before anything is written in plain text
+        if(!status.hasData&&!firstRunDone()){setAppPhase("offerEncryption");return}
       }
       // Not encrypted — load normally
       let d=null;
@@ -1437,6 +1443,25 @@ function NoteForge(){
     title={alertDialog.title} message={alertDialog.message}
     onClose={()=>{const r=alertDialog.resolve;setAlertDialog(null);if(r)r()}}/>;
 
+  // First run (no data file yet), asked once: notes are plain text on disk until a
+  // master password is set, and most people never open Settings to find that out.
+  const finishFirstRun=()=>{
+    try{localStorage.setItem(FIRST_RUN_KEY,"1")}catch{}
+    setPwError("");loadIntoState(structuredClone(DEFAULT_DATA));
+  };
+  if(appPhase==="offerEncryption")return <PasswordDialog dark={dark}
+    title="Protect your notes?"
+    subtitle="Set a master password and NoteForge encrypts your notes on disk; without one they are saved as plain text. There's no recovery if you forget it. You can also do this later in Settings."
+    confirmLabel="Encrypt" cancelLabel="Skip" showConfirm showHint error={pwError}
+    onCancel={finishFirstRun}
+    onSubmit={async(pw,hint)=>{
+      setPwError("");
+      const r=await window.electronAPI.enableEncryption(pw,hint);
+      if(r.error){setPwError(r.error);return}
+      setEncEnabled(true);if(hint)setMasterHint(hint);
+      finishFirstRun();
+    }}/>;
+
   // Loading
   if(appPhase==="loading")return <div className="nf-overlay" style={tv}>
     <div style={{textAlign:"center"}}>
@@ -1516,7 +1541,7 @@ function NoteForge(){
   </div>}
 
   {pwDialog?.type==="enable-enc"&&<PasswordDialog dark={dark}
-    title="Enable Encryption" subtitle="Choose a master password. Don't forget it — there's no recovery."
+    title="Enable Encryption" subtitle="Choose a master password. Don't forget it — there's no recovery. Notes saved before this were plain text: copies can remain in backups such as File History or a sync folder."
     confirmLabel="Encrypt" showConfirm showHint error={pwError}
     onCancel={()=>{setPwDialog({type:"enc-settings"});setPwError("")}}
     onSubmit={async(pw,hint)=>{

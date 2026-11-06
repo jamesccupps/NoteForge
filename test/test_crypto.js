@@ -163,6 +163,11 @@ const DATA = JSON.stringify({ notebooks: [{ id: "nb1", name: "Test", sections: [
     const h3 = loadMain();
     h3.write("noteforge-data.json", DATA);
     t("hint over 200 characters refused", !!(await h3.invoke("enable-encryption", PW, "x".repeat(201))).error && !h3.exists("noteforge-data.enc"));
+    // Plaintext copies an older version or a restore left behind go when encryption goes on
+    h3.write("noteforge-data.json.tmp", DATA);
+    h3.write("noteforge-data.json.pre-restore.bak", DATA);
+    await h3.invoke("enable-encryption", PW, "");
+    t("enable removes leftover plaintext copies", !h3.exists("noteforge-data.json.tmp") && !h3.exists("noteforge-data.json.pre-restore.bak"));
     h3.cleanup();
   }
 

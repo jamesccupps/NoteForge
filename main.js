@@ -520,7 +520,10 @@ ipcMain.handle("enable-encryption", async (_e, password, hint) => {
     data = sanitizeDataJson(data);
     const e = encryptData(data, password);
     writeFileAtomic(encFile, e.blob);
-    if (fs.existsSync(plainFile)) fs.unlinkSync(plainFile);
+    // The plaintext file, and copies of it a failed save (before 2.9) or a restore left
+    for (const f of [plainFile, plainFile + ".tmp", plainFile + ".pre-restore.bak"]) {
+      try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch (err) { console.warn("[NoteForge] couldn't remove", f, err.message); }
+    }
     zeroKey(masterKey);
     masterKey = e.k;
     // Save hint
