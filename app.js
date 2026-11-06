@@ -1388,6 +1388,7 @@ function NoteForge() {
   const [expNb, setExpNb] = useState({});
   const [showFR, setShowFR] = useState(false);
   const [findT, setFindT] = useState("");
+  const [findCase, setFindCase] = useState(false); // Find & Replace: Match case
   const [replT, setReplT] = useState("");
   const [gSearch, setGSearch] = useState("");
   const [gResults, setGResults] = useState([]);
@@ -2639,11 +2640,11 @@ function NoteForge() {
   const findMatches = q => {
     const out = [];
     if (!q || !edRef.current) return out;
-    const needle = q.toLowerCase();
+    const needle = findCase ? q : q.toLowerCase();
     const w = document.createTreeWalker(edRef.current, NodeFilter.SHOW_TEXT, null);
     while (w.nextNode()) {
       const n = w.currentNode,
-        hay = n.textContent.toLowerCase();
+        hay = findCase ? n.textContent : n.textContent.toLowerCase();
       for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + needle.length)) {
         const r = document.createRange();
         r.setStart(n, i);
@@ -2681,7 +2682,7 @@ function NoteForge() {
       index: 0,
       count: ms.length
     });
-  }, [findT, showFR, aPg]);
+  }, [findT, findCase, showFR, aPg]);
   const doFind = (dir = 1) => {
     const ms = findMatches(findT);
     if (!ms.length) {
@@ -2713,7 +2714,7 @@ function NoteForge() {
       sel.removeAllRanges();
       sel.addRange(ms[pos]);
       edRef.current.focus();
-      document.execCommand("insertText", false, replT); // fires input → onInput saves; undoable
+      replaceSelection(); // fires input → onInput saves; undoable
       findPos.current = pos - 1; // the next match now sits at the same index
     }
     doFind(1);
@@ -2740,18 +2741,25 @@ function NoteForge() {
       sel.addRange(ms[pos]);
     }
   };
+  // Through the editor's own commands, so undo reverses it ("" deletes the match)
+  const replaceSelection = () => {
+    if (replT) document.execCommand("insertText", false, replT);else document.execCommand("delete");
+  };
   const doReplAll = () => {
     if (!findT || !edRef.current) return;
-    const walker = document.createTreeWalker(edRef.current, NodeFilter.SHOW_TEXT, null);
-    const escaped = findT.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const nodes = [];
-    while (walker.nextNode()) nodes.push(walker.currentNode);
-    for (const node of nodes) {
-      const re = new RegExp(escaped, "gi");
-      // Function replacement: a string would treat "$&", "$1", "$$" in replT as patterns
-      if (re.test(node.textContent)) node.textContent = node.textContent.replace(new RegExp(escaped, "gi"), () => replT);
+    // One edit per match, last first so the earlier ranges stay where they are. It used
+    // to assign textContent, which undo couldn't reverse. (Each match is its own undo
+    // step: Chromium has no way to group them short of rewriting the whole note.)
+    const ms = findMatches(findT);
+    if (ms.length) {
+      edRef.current.focus();
+      const sel = window.getSelection();
+      for (let i = ms.length - 1; i >= 0; i--) {
+        sel.removeAllRanges();
+        sel.addRange(ms[i]);
+        replaceSelection();
+      }
     }
-    onInput();
     const left = findMatches(findT);
     findPos.current = -1;
     showFindHighlights(left, null);
@@ -2759,6 +2767,7 @@ function NoteForge() {
       index: 0,
       count: left.length
     });
+    replInputRef.current?.focus();
   };
 
   /* ═══ Global Search ════════════════════════════════════════ */
@@ -3968,6 +3977,17 @@ function NoteForge() {
       color: findInfo.count ? "var(--text-muted)" : "var(--danger)"
     }
   }, findInfo.count ? `${findInfo.index || "–"} of ${findInfo.count}` : "No matches"), /*#__PURE__*/React.createElement("button", {
+    className: "nf-find-btn",
+    title: "Match case",
+    "aria-pressed": findCase,
+    onClick: () => setFindCase(v => !v),
+    style: {
+      border: "1px solid " + (findCase ? "var(--accent)" : "var(--border)"),
+      background: findCase ? "var(--accent-bg)" : "var(--bg)",
+      color: findCase ? "var(--accent)" : "var(--text-muted)",
+      fontWeight: 600
+    }
+  }, "Aa"), /*#__PURE__*/React.createElement("button", {
     className: "nf-find-btn",
     onClick: () => doFind(1),
     style: {

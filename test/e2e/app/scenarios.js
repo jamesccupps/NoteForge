@@ -275,6 +275,35 @@ SCENARIOS.replaceAll = {
   },
 };
 
+// Replace All used to assign textContent, which the editor's undo can't reverse, and
+// matched case-insensitively with no way to say otherwise ("cat" also hit "Category").
+SCENARIOS.replaceAllUndoAndCase = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const ORIGINAL = "cat Cat category <b>cat</b>";
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML="<p>${ORIGINAL}</p>";ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+    c.menu("find-replace");
+    await c.waitFor(`document.querySelectorAll(".nf-find-input").length===2`);
+    await c.js(R.type(`document.querySelectorAll(".nf-find-input")[0]`, "cat"));
+    await c.js(R.type(`document.querySelectorAll(".nf-find-input")[1]`, "dog"));
+    const toggle = `document.querySelector('.nf-find-bar [title="Match case"]')`;
+    c.check("Match case option present", await c.js(`!!${toggle}`));
+    await c.js(`${toggle}?.click()`);
+    await c.sleep(200);
+    c.check("Match case narrows the count", (await c.js(`document.querySelector(".nf-find-info")?.textContent||""`)).includes("of 3") ||
+      (await c.js(`document.querySelector(".nf-find-info")?.textContent||""`)) === "– of 3", await c.js(`document.querySelector(".nf-find-info")?.textContent||""`));
+    await c.js(`${R.button(".nf-find-btn", "All")}.click()`);
+    await c.sleep(500);
+    const text = await c.js(R.editorText);
+    c.check("Match case: only lower-case 'cat' replaced", text === "dog Cat dogegory dog", JSON.stringify(text));
+    c.check("formatting kept", await c.js(`document.querySelector(".nf-editor b")?.textContent==="dog"`));
+    await c.js(`document.querySelector(".nf-editor").focus()`);
+    for (let i = 0; i < 3; i++) { await c.js(`document.execCommand("undo")`); await c.sleep(100); }
+    c.check("Replace All can be undone", (await c.js(R.editorText)) === "cat Cat category cat", JSON.stringify(await c.js(R.editorText)));
+  },
+};
+
 SCENARIOS.lockedNotebookWarnings = {
   seed: seedLocked,
   async run(c) {
