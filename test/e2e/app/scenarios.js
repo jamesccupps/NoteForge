@@ -915,6 +915,7 @@ SCENARIOS.passwordStrengthLive = {
       disabled:${R.button(".nf-overlay-btn", "Encrypt")}.disabled,
       text:document.querySelector(".nf-overlay-card").innerText.replace(/\\s+/g," ")})`);
     await fill("Sunshine2024!");
+    await c.waitFor(`/common word/.test(document.querySelector(".nf-overlay-card").innerText)`, 4000).catch(() => {});
     let s = await state();
     c.check("common word + suffix: shown as not OK before submitting", !s.ready && s.disabled && /common word/.test(s.text), s.text.slice(0, 200));
     await fill("Correct-Horse-42");
