@@ -96,6 +96,24 @@ Releases are built automatically by GitHub Actions — no manual build steps req
 
 > **Note:** Windows may show a SmartScreen warning because the app isn't code-signed yet. Click **"More info"** → **"Run anyway"** to proceed. The source code is fully open for inspection.
 
+### Uninstall
+
+Uninstalling removes the program but **keeps your notes**, so a reinstall picks them up again. To keep a copy before removing anything, use **File → Export Backup** first.
+
+**Installed version:**
+
+1. Close NoteForge.
+2. Uninstall it from **Settings → Apps → Installed apps → NoteForge → Uninstall**. Or run `Uninstall NoteForge.exe` in the install folder, by default `%LOCALAPPDATA%\Programs\NoteForge`.
+3. **To remove your notes and settings too**, delete `%APPDATA%\noteforge`. Or uninstall with the flag that does it for you:
+
+   ```
+   "%LOCALAPPDATA%\Programs\NoteForge\Uninstall NoteForge.exe" --delete-app-data
+   ```
+
+4. Optionally, delete `%LOCALAPPDATA%\noteforge-updater`. It holds downloaded update installers, and the uninstaller leaves it behind.
+
+**Portable version:** delete the exe and the `NoteForge Data` folder next to it. Portable builds before 2.9.0 kept their notes in `%APPDATA%\noteforge`, like the installed version.
+
 ### Build from Source
 
 Requires [Node.js](https://nodejs.org/) 22 or 24 (LTS).
