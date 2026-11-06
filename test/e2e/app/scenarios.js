@@ -647,14 +647,23 @@ SCENARIOS.searchEntities = {
     const box = `document.querySelector('input[placeholder="Search all notes…"]')`;
     await c.waitFor(box);
     await c.js(`${box}.focus()`);
-    const results = async (q) => {
+    // Polls: the list is debounced, and shows only while the box has focus (which a
+    // desktop in use can take away mid-run)
+    const results = async (q, want) => {
+      const list = `[...document.querySelectorAll(".nf-gsearch-item")].map(e=>e.querySelector("div").textContent).join(",")`;
+      await c.js(`${box}.focus()`);
       await c.js(R.type(box, q));
-      await c.sleep(400);
-      return c.js(`[...document.querySelectorAll(".nf-gsearch-item")].map(e=>e.querySelector("div").textContent).join(",")`);
+      const t0 = Date.now();
+      let got;
+      do { await c.sleep(150); got = await c.js(list); } while (got !== want && Date.now() - t0 < 2000);
+      return got;
     };
-    c.check('finds "Tom & Jerry"', (await results("Tom & Jerry")) === "Cartoons", await results("Tom & Jerry"));
-    c.check('finds "<3"', (await results("<3")) === "Cartoons", await results("<3"));
-    c.check('no false match on "amp"', (await results("amp")) === "", await results("amp"));
+    let r;
+    c.check('finds "Tom & Jerry"', (r = await results("Tom & Jerry", "Cartoons")) === "Cartoons", r);
+    c.check('finds "<3"', (r = await results("<3", "Cartoons")) === "Cartoons", r);
+    await results("amp", "");
+    await c.sleep(500); // and stays empty
+    c.check('no false match on "amp"', (r = await c.js(`[...document.querySelectorAll(".nf-gsearch-item")].length`)) === 0, r);
   },
 };
 
