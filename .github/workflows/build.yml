@@ -19,14 +19,26 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      # Don't leave the write token in .git/config for npm ci, babel and the tests;
+      # the steps that need it get it as GH_TOKEN
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
+
+      # A tag that doesn't match package.json would publish a latest.yml with the wrong
+      # version (updaters would loop or skip)
+      - name: Tag matches package.json
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if [ "v$v" != "$GITHUB_REF_NAME" ]; then echo "::error::tag $GITHUB_REF_NAME but package.json says $v"; exit 1; fi
 
       # npm ci installs exactly what package-lock.json records
       - name: Install dependencies
@@ -57,6 +69,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npx electron-builder --win --publish always
+
+      # The draft stays unpublished if the shipped exe lacks a fuse package.json asks for
+      - name: Check fuses in the built exe
+        run: node test/check_fuses.js
 
       - name: Publish the release
         shell: bash

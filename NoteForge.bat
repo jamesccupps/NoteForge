@@ -14,9 +14,9 @@ if %errorlevel% neq 0 (
 :: Install dependencies if needed
 if not exist "node_modules" (
     echo Installing dependencies...
-    call npm install
+    call npm ci
     if %errorlevel% neq 0 (
-        echo [ERROR] npm install failed.
+        echo [ERROR] npm ci failed.
         pause
         exit /b 1
     )
