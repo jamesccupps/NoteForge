@@ -20,6 +20,17 @@ t(`electron major >= 44 (got ${electronMajor})`, electronMajor >= 44);
 const bundled = (fs.readFileSync(path.join(root, "lib", "purify.min.js"), "utf-8").match(/DOMPurify (\d+\.\d+\.\d+)/) || [])[1];
 t(`dompurify devDependency pinned to the bundled version (${bundled})`, pkg.devDependencies.dompurify === bundled, pkg.devDependencies.dompurify);
 
+// Vendored scripts are what the app runs. Compared with line endings normalized, since
+// a Windows checkout may have converted them.
+const crypto = require("crypto");
+const text = (p) => fs.readFileSync(p, "utf-8").replace(/\r\n/g, "\n");
+const sha256 = (p) => crypto.createHash("sha256").update(text(p)).digest("hex");
+const npmPurify = path.join(root, "node_modules", "dompurify", "dist", "purify.min.js");
+if (fs.existsSync(npmPurify)) t("lib/purify.min.js is the npm build, byte for byte", text(path.join(root, "lib", "purify.min.js")) === text(npmPurify));
+// React 18.3.1 production UMD builds (umd/*.production.min.js in the npm packages)
+t("lib/react.min.js is React 18.3.1", sha256(path.join(root, "lib", "react.min.js")) === "d949f1c3687aedadcedac85261865f29b17cd273997e7f6b2bfc53b2f9d4c4dd");
+t("lib/react-dom.min.js is ReactDOM 18.3.1", sha256(path.join(root, "lib", "react-dom.min.js")) === "35f4f974f4b2bcd44da73963347f8952e341f83909e4498227d4e26b98f66f0d");
+
 for (const f of ["main.js", "preload.js", "app.js"]) {
   try { new vm.Script(fs.readFileSync(path.join(root, f), "utf-8")); t(`${f} syntactically valid`, true); }
   catch (e) { t(`${f} syntactically valid`, false, e.message); }
