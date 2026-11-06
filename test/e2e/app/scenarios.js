@@ -1082,6 +1082,41 @@ SCENARIOS.dropUsesPastePath = {
   },
 };
 
+// A restored or hand-edited file missing arrays (a notebook without sections, a section
+// without pages) left a blank window
+SCENARIOS.malformedDataStillOpens = {
+  seed: () => ({ notebooks: [
+    { id: "n1", name: "No sections" },
+    { id: "n2", name: "No pages", sections: [{ id: "s2", name: "S2" }] },
+    { id: "n3", name: "Fine", sections: [{ id: "s3", name: "S3", pages: [page("p3", "Kept", "<p>ok here</p>")] }] },
+  ] }),
+  async run(c) {
+    await c.waitFor(R.nb("Fine"), 5000).catch(() => {});
+    c.check("app renders with malformed notebooks", await c.js(`!!${R.nb("Fine")}&&!!${R.nb("No sections")}`));
+    await c.js(`${R.nb("Fine")}.click()`).catch(() => {});
+    await c.sleep(300);
+    c.check("intact pages still open", (await c.js(R.editorText)).includes("ok here"));
+    c.consumeConsoleErrors(/./); // React's own report, when it crashes (checked above)
+  },
+};
+
+// Last line of defence: a render error shows a recovery screen, not a blank window
+SCENARIOS.errorBoundary = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const shown = await c.js(`(async()=>{
+      if(typeof ErrorBoundary!=="function")return "no ErrorBoundary";
+      const host=document.createElement("div");document.body.appendChild(host);
+      const Boom=()=>{throw new Error("boom-test")};
+      ReactDOM.createRoot(host).render(React.createElement(ErrorBoundary,null,React.createElement(Boom)));
+      await new Promise(r=>setTimeout(r,300));
+      const t=host.innerText;host.remove();return t})()`);
+    c.check("render error shows the recovery screen", /Something went wrong/.test(shown) && /boom-test/.test(shown) && /Reload/.test(shown), shown);
+    c.consumeConsoleErrors(/boom-test|render error|above error/i);
+  },
+};
+
 // CSP: a <base> element must not re-point relative URLs (base-uri 'none'), and forms
 // can't submit anywhere (form-action 'none')
 SCENARIOS.cspBaseAndForms = {

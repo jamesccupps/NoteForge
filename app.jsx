@@ -195,6 +195,21 @@ function sanitizeForDiskSync(data){
   })};
 }
 
+/* ── Data shape ──────────────────────────────────────────────
+   The UI assumes every notebook has a sections array and every section a pages
+   array, with string names and content. A restored or hand-edited file without them
+   left a blank window. */
+const asArray=(x)=>Array.isArray(x)?x:[];
+const asString=(x)=>typeof x==="string"?x:"";
+const isRecord=(x)=>x&&typeof x==="object"&&!Array.isArray(x);
+function normalizeSections(sections){
+  return asArray(sections).filter(isRecord).map(sec=>({...sec,id:sec.id||uid(),name:asString(sec.name)||"Untitled",
+    pages:asArray(sec.pages).filter(isRecord).map(pg=>({...pg,id:pg.id||uid(),title:asString(pg.title),content:asString(pg.content)}))}));
+}
+function normalizeData(d){
+  return{...(isRecord(d)?d:{}),notebooks:asArray(d?.notebooks).filter(isRecord).map(nb=>({...nb,id:nb.id||uid(),name:asString(nb.name)||"Untitled",sections:normalizeSections(nb.sections)}))};
+}
+
 /* ── Editor HTML for saving ─────────────────────────────────────
    Chromium's list commands build <p><ul>…</ul></p>. That renders fine live, but the
    HTML parser turns it into empty paragraphs around the list on reload. Save an
@@ -722,7 +737,8 @@ function NoteForge(){
     setShowTrash(false);
   },[]);
 
-  const loadIntoState=useCallback((d)=>{
+  const loadIntoState=useCallback((raw)=>{
+    const d=normalizeData(raw);
     dataRef.current=d;
     setData(d);
     const nb=d.notebooks[0];
@@ -1258,7 +1274,7 @@ function NoteForge(){
     const r=await window.electronAPI.decryptNotebookSections(nb.encSections,password);
     if(!r.success)return{error:r.error};
     try{
-      const sections=JSON.parse(r.sections);
+      const sections=normalizeSections(JSON.parse(r.sections));
       if(r.nbKeyId)nbKeys.current.set(nbId,r.nbKeyId);
       const nd={...d,notebooks:d.notebooks.map(n=>n.id!==nbId?n:{...n,sections})};
       dataRef.current=nd;
@@ -1970,4 +1986,21 @@ function NoteForge(){
   </div>);
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<NoteForge/>);
+/* Last line of defence: an exception while rendering left a blank window, with no
+   sign that the notes on disk were fine. */
+class ErrorBoundary extends React.Component{
+  constructor(p){super(p);this.state={error:null}}
+  static getDerivedStateFromError(error){return{error}}
+  componentDidCatch(error,info){console.error("[NoteForge] render error:",error,info?.componentStack)}
+  render(){
+    if(!this.state.error)return this.props.children;
+    return <div className="nf-overlay"><div className="nf-overlay-card">
+      <div className="nf-overlay-title">Something went wrong</div>
+      <div className="nf-overlay-sub">NoteForge hit an error while showing your notes. The notes on disk are as they were at the last save.</div>
+      <pre style={{textAlign:"left",fontSize:11,whiteSpace:"pre-wrap",maxHeight:120,overflow:"auto",margin:"0 0 14px"}}>{String(this.state.error?.message||this.state.error)}</pre>
+      <button className="nf-overlay-btn primary" onClick={()=>window.location.reload()}>Reload</button>
+    </div></div>;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><NoteForge/></ErrorBoundary>);
