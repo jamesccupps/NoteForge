@@ -1795,13 +1795,17 @@ function NoteForge() {
     persist(nd);
   }, [persist]);
   const onInput = useCallback(() => {
-    if (!edRef.current || !dataRef.current || !aPg) return;
-    updatePage(aPg, () => ({
+    // Save to the page the editor is showing, not the aPg this closure saw: a late
+    // async insert (image paste) called a stale onInput and saved page B's content
+    // over page A.
+    const pg = prevPgRef.current;
+    if (!edRef.current || !dataRef.current || !pg) return;
+    updatePage(pg, () => ({
       content: serializeEditor(edRef.current),
       modified: Date.now()
     }));
     updStats();
-  }, [aPg, updatePage, updStats]);
+  }, [updatePage, updStats]);
   const exec = useCallback((cmd, val = null) => {
     edRef.current?.focus();
     document.execCommand(cmd, false, val);
@@ -1871,7 +1875,16 @@ function NoteForge() {
         if (!file) return;
         // Auto-downscale large images so the encrypted data file stays lean.
         // 5 MB hard cap to avoid canvas/memory pathologies.
+        const pastedOn = prevPgRef.current;
         downscaleImage(file, 512000).then(dataUrl => {
+          // Processing takes a moment; don't drop it into a page opened meanwhile
+          if (prevPgRef.current !== pastedOn) {
+            alertUser({
+              title: "Image not pasted",
+              message: "You moved to another page while the image was being prepared. Paste it again where you want it."
+            });
+            return;
+          }
           exec("insertHTML", `<img src="${dataUrl}" alt="">`);
         }).catch(err => {
           alertUser({
@@ -2769,6 +2782,7 @@ function NoteForge() {
   const insertLink = async () => {
     const sel = window.getSelection();
     const selText = sel?.toString() || "";
+    const onPage = prevPgRef.current;
     const url = await promptUser({
       title: "Insert Link",
       message: selText ? `Link URL for "${selText.slice(0, 40)}"` : "Enter URL",
@@ -2776,6 +2790,7 @@ function NoteForge() {
       defaultValue: "https://"
     });
     if (!url || !url.trim() || url.trim() === "https://") return;
+    if (prevPgRef.current !== onPage) return; // another page was opened while the prompt was up
     const safe = escHtml(url.trim());
     const text = escHtml(selText || url.trim());
     exec("insertHTML", `<a href="${safe}" title="${safe}" target="_blank" rel="noopener noreferrer">${text}</a>`);

@@ -1032,6 +1032,43 @@ SCENARIOS.lockClosesDialogs = {
   },
 };
 
+// An image paste is processed asynchronously. Switching page before it finished
+// inserted the image into the new page and saved that page's content over the old one.
+SCENARIOS.latePasteKeepsPages = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages.push(page("pg-b", "Page B", "<p>bravo body</p>"));
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    // A noisy 800x800 PNG (~2.5 MB) is over 512 KB, so it goes through the canvas downscale
+    await c.js(`(async()=>{
+      const cv=document.createElement("canvas");cv.width=cv.height=800;const x=cv.getContext("2d");
+      const im=x.createImageData(800,800);for(let i=0;i<im.data.length;i++)im.data[i]=(Math.random()*256)|0;x.putImageData(im,0,0);
+      const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+      window.__img=new File([blob],"big.png",{type:"image/png"});return window.__img.size})()`);
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();
+      const dt=new DataTransfer();dt.items.add(window.__img);
+      ed.dispatchEvent(new ClipboardEvent("paste",{clipboardData:dt,bubbles:true,cancelable:true}));
+      [...document.querySelectorAll(".nf-pg")].find(e=>e.textContent.includes("Page B")).click()})()`);
+    await c.sleep(3000);
+    const pages = c.readData().notebooks[0].sections[0].pages;
+    const a = pages.find((p) => p.id === "pg-a").content, b = pages.find((p) => p.id === "pg-b").content;
+    c.check("page A keeps its own content", a.includes("alpha body") && !a.includes("bravo"), a.slice(0, 120));
+    c.check("page B keeps its own content", b.includes("bravo body"), b.slice(0, 120));
+    c.check("the image didn't land on page B", !b.includes("<img"));
+    c.check("user told the paste was dropped", await c.js(`document.querySelector(".nf-modal")?.innerText.includes("another page")||false`));
+    await c.js(`${R.button(".nf-modal-btn", "OK")}.click()`);
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();
+      const dt=new DataTransfer();dt.items.add(window.__img);
+      ed.dispatchEvent(new ClipboardEvent("paste",{clipboardData:dt,bubbles:true,cancelable:true}))})()`);
+    const d = await c.waitForData((d) => d.notebooks[0].sections[0].pages.find((p) => p.id === "pg-b").content.includes("<img"), 6000);
+    const b2 = d.notebooks[0].sections[0].pages.find((p) => p.id === "pg-b").content;
+    c.check("a paste that stays on its page is inserted and saved", b2.includes("<img") && b2.includes("bravo body"), b2.slice(0, 80));
+  },
+};
+
 // A save that can't be written (the file held by another program) shows as failed,
 // stays pending and is written once the file is free; closing meanwhile still flushes it.
 SCENARIOS.failedSaveIsRetried = {
