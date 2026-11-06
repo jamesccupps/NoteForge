@@ -255,6 +255,64 @@ const DATA = JSON.stringify({ notebooks: [{ id: "nb1", name: "Test", sections: [
     h.cleanup();
   }
 
+  section("Only a failed GCM check is a wrong password");
+  {
+    // A damaged file used to read "Wrong password" and count toward the lockout, so
+    // the user concluded they'd forgotten it and locked themselves out further.
+    const fs = require("fs");
+    const h = loadMain();
+    h.write("noteforge-data.json", DATA);
+    await h.invoke("enable-encryption", PW, "");
+    const good = h.read("noteforge-data.enc");
+    h.write("noteforge-data.enc", good.slice(0, good.length / 2)); // truncated
+    let r;
+    for (let i = 0; i < 6; i++) r = await h.restart().invoke("unlock-master", PW);
+    t("truncated vault reported as damaged", r.damaged === true && /damaged/i.test(r.error) && !/Wrong password/.test(r.error), JSON.stringify(r));
+    t("...and names the earlier versions", /prev-1\.enc/.test(r.error));
+    h.write("noteforge-data.enc", good);
+    t("damaged-file attempts don't count toward the lockout", (await h.restart().invoke("unlock-master", PW)).value === DATA);
+    const hdr = JSON.parse(good);
+    h.write("noteforge-data.enc", JSON.stringify({ ...hdr, N: 3 }));
+    t("bad header reported as damaged", (await h.restart().invoke("unlock-master", PW)).damaged === true);
+    h.write("noteforge-data.enc", good);
+    t("a wrong password is still a wrong password", (await h.restart().invoke("unlock-master", "nope-nope-nope")).error === "Wrong password");
+
+    // Remove Encryption: the .enc file can't be deleted after the plaintext is written
+    const h2 = h.restart();
+    await h2.invoke("unlock-master", PW);
+    const realUnlink = fs.unlinkSync;
+    fs.unlinkSync = (p) => { if (String(p).endsWith("noteforge-data.enc")) { const e = new Error("EBUSY: resource busy"); e.code = "EBUSY"; throw e; } return realUnlink(p); };
+    const d = await h2.invoke("disable-encryption", PW);
+    fs.unlinkSync = realUnlink;
+    t("disable: an unlink failure is reported as what it is", !!d.error && !/Wrong password/.test(d.error), JSON.stringify(d));
+    t("disable: no plaintext copy left next to the vault", !h2.exists("noteforge-data.json"));
+    t("disable: vault intact", (await h2.restart().invoke("unlock-master", PW)).value === DATA);
+    h.cleanup();
+  }
+  {
+    // Upgrading an old-parameter vault on unlock: if that write fails, still unlock
+    const fs = require("fs");
+    const h = loadMain();
+    h.write("noteforge-data.enc", makeBlob(DATA, PW, { N: 16384 }));
+    const realRename = fs.renameSync;
+    fs.renameSync = () => { const e = new Error("ENOSPC: no space left on device"); e.code = "ENOSPC"; throw e; };
+    const r = await h.invoke("unlock-master", PW);
+    fs.renameSync = realRename;
+    t("unlock succeeds when the upgrade can't be written", r.value === DATA, JSON.stringify(r));
+    await h.invoke("storage-set", DATA.replace("Hello", "Later"));
+    t("...and later saves still open", (await h.restart().invoke("unlock-master", PW)).value === DATA.replace("Hello", "Later"));
+    h.cleanup();
+  }
+  {
+    const h = loadMain();
+    const blob = makeBlob("[]", PW);
+    const bad = JSON.stringify({ ...JSON.parse(blob), N: 3 });
+    let r;
+    for (let i = 0; i < 6; i++) r = await h.invoke("decrypt-notebook-sections", bad, PW);
+    t("damaged notebook blob: says so, no lockout", /damaged/i.test(r.error || ""), JSON.stringify(r));
+    h.cleanup();
+  }
+
   section("Password strength (real WEAK_PASSWORDS list)");
   {
     const h = loadMain();

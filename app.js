@@ -1411,6 +1411,7 @@ function NoteForge() {
   const [alertDialog, setAlertDialog] = useState(null); // {title,message}
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [restoreFlow, setRestoreFlow] = useState(null); // {backupPath,hasHint}
+  const [vaultDamaged, setVaultDamaged] = useState(false); // the last unlock found the file damaged
   // Toolbar reflection — tracks current format under cursor
   const [toolbarFmt, setToolbarFmt] = useState({
     block: "div",
@@ -1502,6 +1503,24 @@ function NoteForge() {
       resolve
     });
   }), []);
+
+  // File → Restore from Backup, and the lock screen's button when the vault is damaged
+  const startRestore = useCallback(async () => {
+    const r = await window.electronAPI.restoreBackup();
+    if (r?.error) {
+      alertUser({
+        title: "Restore failed",
+        message: r.error
+      });
+      return;
+    }
+    if (r?.readyForPassword) {
+      setRestoreFlow({
+        backupPath: r.backupPath,
+        hasHint: r.hasHint
+      });
+    }
+  }, [alertUser]);
   useEffect(() => {
     prefsStore.save({
       dark,
@@ -2074,22 +2093,7 @@ function NoteForge() {
         type: "enc-settings"
       });
       if (a === "export-backup") window.electronAPI.exportBackup();
-      if (a === "restore-backup") (async () => {
-        const r = await window.electronAPI.restoreBackup();
-        if (r?.error) {
-          alertUser({
-            title: "Restore failed",
-            message: r.error
-          });
-          return;
-        }
-        if (r?.readyForPassword) {
-          setRestoreFlow({
-            backupPath: r.backupPath,
-            hasHint: r.hasHint
-          });
-        }
-      })();
+      if (a === "restore-backup") startRestore();
       if (a === "lock-app") {
         if (encEnabled) lockApp();
       }
@@ -2866,6 +2870,58 @@ function NoteForge() {
      RENDER
      ═══════════════════════════════════════════════════════════ */
   const tv = dark ? THEMES.dark : THEMES.light;
+  const restoreEl = restoreFlow && /*#__PURE__*/React.createElement(PasswordDialog, {
+    dark: dark,
+    title: "Verify Backup Password",
+    subtitle: "Enter the password for the backup file. Your current data will be kept if this fails.",
+    confirmLabel: "Restore Backup",
+    error: pwError,
+    onCancel: () => {
+      setRestoreFlow(null);
+      setPwError("");
+    },
+    onSubmit: async pw => {
+      setPwError("");
+      const r = await window.electronAPI.verifyAndRestoreBackup(restoreFlow.backupPath, pw);
+      if (r?.error) {
+        setPwError(r.error);
+        return;
+      }
+      setRestoreFlow(null);
+      if (r?.needsRestart) {
+        await alertUser({
+          title: "Restore complete",
+          message: "Enter the backup password to unlock your restored data." + (r.rollbackPath ? ` Your previous notes were saved as ${r.rollbackPath}` : "")
+        });
+        // The restored file replaced everything: nothing from this session carries over
+        // (a notebook unlocked before it looked unlocked, and empty, after it)
+        if (saveTimer.current) {
+          clearTimeout(saveTimer.current);
+          saveTimer.current = null;
+        }
+        resetSession();
+        setVaultDamaged(false);
+        dataRef.current = null;
+        setData(null);
+        setANb(null);
+        setASec(null);
+        setAPg(null);
+        prevPgRef.current = null;
+        setEncEnabled(true);
+        setAppPhase("needsPassword");
+      }
+    }
+  });
+  const alertEl = alertDialog && /*#__PURE__*/React.createElement(AlertDialog, {
+    dark: dark,
+    title: alertDialog.title,
+    message: alertDialog.message,
+    onClose: () => {
+      const r = alertDialog.resolve;
+      setAlertDialog(null);
+      if (r) r();
+    }
+  });
 
   // Loading
   if (appPhase === "loading") return /*#__PURE__*/React.createElement("div", {
@@ -2893,7 +2949,9 @@ function NoteForge() {
   }, "Loading\u2026")));
 
   // Master password prompt
-  if (appPhase === "needsPassword") return /*#__PURE__*/React.createElement(PasswordDialog, {
+  // Restore and its alerts render on the lock screen too: a damaged vault left no way
+  // past the lock screen, and the File menu's Restore did nothing there.
+  if (appPhase === "needsPassword") return /*#__PURE__*/React.createElement(React.Fragment, null, restoreEl || /*#__PURE__*/React.createElement(PasswordDialog, {
     dark: dark,
     title: "Unlock NoteForge",
     subtitle: masterHint ? `Enter your master password. Hint: ${masterHint}` : "Enter your master password to decrypt your notes.",
@@ -2902,6 +2960,7 @@ function NoteForge() {
     onSubmit: async pw => {
       setPwError("");
       const r = await window.electronAPI.unlockMaster(pw);
+      setVaultDamaged(!!r.damaged);
       if (r.error) {
         setPwError(r.error);
         return;
@@ -2914,7 +2973,16 @@ function NoteForge() {
       if (!d || !d.notebooks) d = structuredClone(DEFAULT_DATA);
       loadIntoState(d);
     }
-  });
+  }, vaultDamaged && /*#__PURE__*/React.createElement("button", {
+    className: "nf-overlay-btn secondary",
+    style: {
+      marginBottom: 8
+    },
+    onClick: () => {
+      setPwError("");
+      startRestore();
+    }
+  }, "Restore from Backup\u2026")), alertEl);
   if (!data) return null;
   return /*#__PURE__*/React.createElement("div", {
     className: "nf-root",
@@ -4239,60 +4307,9 @@ function NoteForge() {
       setPromptDialog(null);
       r(null);
     }
-  }), alertDialog && /*#__PURE__*/React.createElement(AlertDialog, {
-    dark: dark,
-    title: alertDialog.title,
-    message: alertDialog.message,
-    onClose: () => {
-      const r = alertDialog.resolve;
-      setAlertDialog(null);
-      if (r) r();
-    }
-  }), showShortcuts && /*#__PURE__*/React.createElement(ShortcutsDialog, {
+  }), alertEl, showShortcuts && /*#__PURE__*/React.createElement(ShortcutsDialog, {
     dark: dark,
     onClose: () => setShowShortcuts(false)
-  }), restoreFlow && /*#__PURE__*/React.createElement(PasswordDialog, {
-    dark: dark,
-    title: "Verify Backup Password",
-    subtitle: "Enter the password for the backup file. Your current data will be kept if this fails.",
-    confirmLabel: "Restore Backup",
-    error: pwError,
-    onCancel: () => {
-      setRestoreFlow(null);
-      setPwError("");
-    },
-    onSubmit: async pw => {
-      setPwError("");
-      const r = await window.electronAPI.verifyAndRestoreBackup(restoreFlow.backupPath, pw);
-      if (r?.error) {
-        setPwError(r.error);
-        return;
-      }
-      setRestoreFlow(null);
-      if (r?.needsRestart) {
-        // Show this before switching phase: the unlock screen is an early return, so
-        // an alert opened after setAppPhase("needsPassword") never rendered.
-        await alertUser({
-          title: "Restore complete",
-          message: "Enter the backup password to unlock your restored data." + (r.rollbackPath ? ` Your previous notes were saved as ${r.rollbackPath}` : "")
-        });
-        // The restored file replaced everything: nothing from this session carries over
-        // (a notebook unlocked before it looked unlocked, and empty, after it)
-        if (saveTimer.current) {
-          clearTimeout(saveTimer.current);
-          saveTimer.current = null;
-        }
-        resetSession();
-        dataRef.current = null;
-        setData(null);
-        setANb(null);
-        setASec(null);
-        setAPg(null);
-        prevPgRef.current = null;
-        setEncEnabled(true);
-        setAppPhase("needsPassword");
-      }
-    }
-  }));
+  }), restoreEl);
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(NoteForge, null));

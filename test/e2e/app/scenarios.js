@@ -1032,6 +1032,46 @@ SCENARIOS.lockClosesDialogs = {
   },
 };
 
+// A damaged vault: the lock screen says so (not "Wrong password") and offers Restore,
+// which used to be unreachable while locked.
+SCENARIOS.damagedVaultOffersRestore = {
+  messageBoxResponse: 0, // "Choose Backup…"
+  seed: seedBase,
+  openDialog: (tmp) => {
+    const file = require("path").join(tmp, "noteforge-data.prev-1.enc");
+    require("fs").writeFileSync(file, encryptBlob(JSON.stringify(seedBase()), BACKUP_PW));
+    return { canceled: false, filePaths: [file] };
+  },
+  async run(c) {
+    const fs = require("fs");
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    await c.js(`window.electronAPI.enableEncryption(${JSON.stringify(BACKUP_PW)},"")`);
+    const enc = fs.readFileSync(c.file("noteforge-data.enc"), "utf-8");
+    fs.writeFileSync(c.file("noteforge-data.enc"), enc.slice(0, 200)); // truncated
+    c.win.webContents.reload();
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Unlock NoteForge"`);
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
+    await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-overlay-error")`);
+    const err = await c.js(`document.querySelector(".nf-overlay-error").textContent`);
+    c.check("lock screen says the file is damaged", /damaged/.test(err) && !/Wrong password/.test(err), err);
+    c.check("Restore from Backup offered", await c.js(`!!${R.button(".nf-overlay-btn", "Restore from Backup…")}`));
+    await c.js(`${R.button(".nf-overlay-btn", "Restore from Backup…")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Verify Backup Password"`);
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
+    await c.js(`${R.button(".nf-overlay-btn", "Restore Backup")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-modal h3")?.textContent==="Restore complete"`);
+    c.check("restore completes from the lock screen", true);
+    await c.js(`${R.button(".nf-modal-btn", "OK")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-overlay-title")?.textContent==="Unlock NoteForge"`);
+    c.check("no Restore button once the vault is fine", !(await c.js(`!!${R.button(".nf-overlay-btn", "Restore from Backup…")}`)));
+    await c.js(R.type(`document.querySelector(".nf-overlay-input")`, BACKUP_PW));
+    await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    c.check("restored notes open", true);
+  },
+};
+
 // An image paste is processed asynchronously. Switching page before it finished
 // inserted the image into the new page and saved that page's content over the old one.
 SCENARIOS.latePasteKeepsPages = {

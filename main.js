@@ -452,30 +452,50 @@ ipcMain.on("storage-set-sync", (event, value, nbKeyIds) => {
 /* ═══════════════════════════════════════════════════════════════
    IPC: MASTER PASSWORD (derived key cached, password discarded)
    ═══════════════════════════════════════════════════════════════ */
+// Only a failed GCM check means a wrong password (a damaged ciphertext fails it too
+// and can't be told apart). Everything else is reported as what it is and doesn't
+// count toward the lockout: a damaged file used to read "Wrong password", and each
+// try lengthened the lockout of someone who had the right one.
+const isWrongPassword = (e) => /unable to authenticate data/i.test(e?.message || "");
+const fsErrorText = (e) => e?.code ? `${e.code}: ${e.syscall || "file"} failed` : (e?.message || "unknown error");
+const damagedVaultText = () => "The data file is damaged and can't be decrypted. Earlier versions are kept in " +
+  userDataPath + " (noteforge-data.prev-1.enc is the newest): choose Restore from Backup and pick one.";
+// -> { result } | { error, damaged?, wrong? }
+function openVault(password) {
+  let raw;
+  try {
+    if (!fs.existsSync(encFile)) return { error: "No encrypted data found" };
+    raw = fs.readFileSync(encFile, "utf-8");
+  } catch (e) { return { error: "Couldn't read the data file (" + fsErrorText(e) + ")" }; }
+  try { return { result: decryptData(raw, password) }; }
+  catch (e) { return isWrongPassword(e) ? { wrong: true } : { error: damagedVaultText(), damaged: true }; }
+}
+
 ipcMain.handle("unlock-master", async (_e, password) => {
   const rlErr = checkMasterRateLimit();
   if (rlErr) return { error: rlErr };
-  try {
-    if (!fs.existsSync(encFile)) return { error: "No encrypted data found" };
-    const raw = fs.readFileSync(encFile, "utf-8");
-    const result = decryptData(raw, password);
-    recordMasterSuccess();
-    // A v1 file, or one made with other parameters: re-encrypt it with the current
-    // ones while the password is at hand. Now, not at the next save, because
-    // storage-get reads the file back with the cached key.
-    zeroKey(masterKey);
-    snapshotDue = true;
-    if (result.isV1 || !isCurrentKdf(result.k)) {
-      zeroKey(result.k);
+  const o = openVault(password);
+  if (o.wrong) { recordMasterFailure(); return { error: "Wrong password" }; }
+  if (!o.result) return { error: o.error, damaged: o.damaged };
+  const result = o.result;
+  recordMasterSuccess();
+  zeroKey(masterKey);
+  masterKey = result.k;
+  snapshotDue = true;
+  // A v1 file, or one made with other parameters: re-encrypt it with the current ones
+  // while the password is at hand. Now, not at the next save, because storage-get reads
+  // the file back with the cached key. If that write fails, keep the key it was opened
+  // with: saves write that key's own parameters, so the file stays readable.
+  if (result.isV1 || !isCurrentKdf(result.k)) {
+    try {
       snapshotVault(); // the file as it was, before the upgrade rewrites it
       const e = encryptData(result.plaintext, password);
       writeFileAtomic(encFile, e.blob);
+      zeroKey(result.k);
       masterKey = e.k;
-    } else {
-      masterKey = result.k;
-    }
-    return { success: true, value: result.plaintext };
-  } catch (e) { recordMasterFailure(); return { error: "Wrong password" }; }
+    } catch (e) { console.warn("[NoteForge] couldn't upgrade the data file:", e.message); }
+  }
+  return { success: true, value: result.plaintext };
 });
 
 const MAX_HINT_LEN = 200;
@@ -506,21 +526,26 @@ ipcMain.handle("enable-encryption", async (_e, password, hint) => {
 ipcMain.handle("disable-encryption", async (_e, password) => {
   const rlErr = checkMasterRateLimit();
   if (rlErr) return { error: rlErr };
+  if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
+  const o = openVault(password);
+  if (o.wrong) { recordMasterFailure(); return { error: "Wrong password" }; }
+  if (!o.result) return { error: o.error };
+  recordMasterSuccess();
+  zeroKey(o.result.k);
   try {
-    if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
-    const result = decryptData(fs.readFileSync(encFile, "utf-8"), password);
-    zeroKey(result.k);
     // Sanitize before writing plaintext
-    writeFileAtomic(plainFile, sanitizeDataJson(result.plaintext));
-    fs.unlinkSync(encFile);
-    if (fs.existsSync(hintFile)) fs.unlinkSync(hintFile);
-    deleteSnapshots();
-    // Only the master key: protected notebooks open in the renderer stay open, and
-    // their next saves need their keys (dropping them lost their edits)
-    clearMasterKey();
-    recordMasterSuccess();
-    return { success: true };
-  } catch (e) { recordMasterFailure(); return { error: "Wrong password" }; }
+    writeFileAtomic(plainFile, sanitizeDataJson(o.result.plaintext));
+    // If the vault can't be removed, take the plaintext copy back out: with both
+    // files present the app stays encrypted and the copy would just sit there
+    try { fs.unlinkSync(encFile); }
+    catch (e) { try { fs.unlinkSync(plainFile); } catch {} throw e; }
+  } catch (e) { return { error: "Couldn't turn encryption off (" + fsErrorText(e) + "). Nothing was changed." }; }
+  try { if (fs.existsSync(hintFile)) fs.unlinkSync(hintFile); } catch {}
+  deleteSnapshots();
+  // Only the master key: protected notebooks open in the renderer stay open, and
+  // their next saves need their keys (dropping them lost their edits)
+  clearMasterKey();
+  return { success: true };
 });
 
 ipcMain.handle("change-master-password", async (_e, oldPassword, newPassword) => {
@@ -528,21 +553,23 @@ ipcMain.handle("change-master-password", async (_e, oldPassword, newPassword) =>
   if (rlErr) return { error: rlErr };
   const strengthErr = checkPasswordStrength(newPassword);
   if (strengthErr) return { error: strengthErr };
+  if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
+  const o = openVault(oldPassword);
+  if (o.wrong) { recordMasterFailure(); return { error: "Wrong current password" }; }
+  if (!o.result) return { error: o.error };
+  recordMasterSuccess();
+  zeroKey(o.result.k);
   try {
-    if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
-    const result = decryptData(fs.readFileSync(encFile, "utf-8"), oldPassword);
-    zeroKey(result.k);
     // Re-encrypt with the new password. The session key is replaced only once the new
     // file is written: a second scrypt used to run after the old key was zeroed, and
     // if it failed, saves encrypted under an all-zero key.
-    const e = encryptData(sanitizeDataJson(result.plaintext), newPassword);
+    const e = encryptData(sanitizeDataJson(o.result.plaintext), newPassword);
     writeFileAtomic(encFile, e.blob);
     deleteSnapshots();
     zeroKey(masterKey);
     masterKey = e.k;
-    recordMasterSuccess();
     return { success: true };
-  } catch (e) { recordMasterFailure(); return { error: "Wrong current password" }; }
+  } catch (e) { return { error: "Couldn't save the new password (" + fsErrorText(e) + "). The old one still works." }; }
 });
 
 ipcMain.handle("check-password-strength", async (_e, pw) => ({ error: checkPasswordStrength(pw) }));
@@ -552,12 +579,13 @@ ipcMain.handle("check-password-strength", async (_e, pw) => ({ error: checkPassw
 ipcMain.handle("verify-master-password", async (_e, password) => {
   const rlErr = checkMasterRateLimit();
   if (rlErr) return { error: rlErr };
-  try {
-    if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
-    zeroKey(decryptData(fs.readFileSync(encFile, "utf-8"), password).k);
-    recordMasterSuccess();
-    return { success: true };
-  } catch (e) { recordMasterFailure(); return { error: "Wrong current password" }; }
+  if (!fs.existsSync(encFile)) return { error: "Not encrypted" };
+  const o = openVault(password);
+  if (o.wrong) { recordMasterFailure(); return { error: "Wrong current password" }; }
+  if (!o.result) return { error: o.error };
+  zeroKey(o.result.k);
+  recordMasterSuccess();
+  return { success: true };
 });
 ipcMain.handle("lock-app", async () => { lockSession(); return { success: true }; });
 
@@ -588,7 +616,11 @@ ipcMain.handle("decrypt-notebook-sections", async (_e, blob, password) => {
     const nbKeyId = crypto.randomBytes(16).toString("hex");
     nbSessionKeys.set(nbKeyId, currentKeyFor(password, result.k));
     return { success: true, sections: result.plaintext, nbKeyId };
-  } catch (e) { recordNbFailure(nbKey); return { error: "Wrong password" }; }
+  } catch (e) {
+    if (!isWrongPassword(e)) return { error: "This notebook's data is damaged and can't be decrypted" };
+    recordNbFailure(nbKey);
+    return { error: "Wrong password" };
+  }
 });
 
 ipcMain.handle("forget-notebook-key", async (_e, nbKeyId) => {
@@ -682,7 +714,7 @@ ipcMain.handle("verify-and-restore-backup", async (_e, backupPath, password) => 
     // Test-decrypt — if this throws, the password is wrong and we do NOTHING destructive
     zeroKey(decryptData(raw, password).k); // a test decrypt; the next unlock derives its own
   } catch (e) {
-    return { error: "Could not decrypt backup — wrong password or corrupted file" };
+    return { error: isWrongPassword(e) ? "Wrong password for this backup" : "The backup file is damaged or isn't a NoteForge backup" };
   }
   // Password verified. Copy whatever is there now (encrypted or not) to a rollback
   // file before touching it; if that copy fails, stop. The old code only kept an
