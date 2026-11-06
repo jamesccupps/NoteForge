@@ -380,13 +380,6 @@ ipcMain.handle("check-encryption", async () => {
   return { encrypted: fs.existsSync(encFile), hasData: fs.existsSync(encFile) || fs.existsSync(plainFile), hint };
 });
 
-ipcMain.handle("set-hint", async (_e, hint) => {
-  try {
-    if (hint && hint.trim()) fs.writeFileSync(hintFile, hint.trim(), "utf-8");
-    else if (fs.existsSync(hintFile)) fs.unlinkSync(hintFile);
-    return true;
-  } catch { return false; }
-});
 
 /* ═══════════════════════════════════════════════════════════════
    IPC: STORAGE (uses session key when available)
@@ -485,13 +478,18 @@ ipcMain.handle("unlock-master", async (_e, password) => {
   } catch (e) { recordMasterFailure(); return { error: "Wrong password" }; }
 });
 
+const MAX_HINT_LEN = 200;
 ipcMain.handle("enable-encryption", async (_e, password, hint) => {
+  // For unencrypted data only. Over an existing vault this encrypted "{}" while
+  // locked (wiping the notes) and re-keyed it without the current password while
+  // unlocked; Change Password is the way to re-key.
+  if (fs.existsSync(encFile)) return { error: "Encryption is already on" };
+  if (hint != null && (typeof hint !== "string" || hint.length > MAX_HINT_LEN)) return { error: `Hint is limited to ${MAX_HINT_LEN} characters` };
   const strengthErr = checkPasswordStrength(password);
   if (strengthErr) return { error: strengthErr };
   try {
     let data = "{}";
     if (fs.existsSync(plainFile)) data = fs.readFileSync(plainFile, "utf-8");
-    else if (masterKey) data = decryptWithSession(fs.readFileSync(encFile, "utf-8"));
     // Sanitize before encrypting
     data = sanitizeDataJson(data);
     const e = encryptData(data, password);

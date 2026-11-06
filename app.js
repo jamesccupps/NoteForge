@@ -1338,6 +1338,7 @@ function PasswordDialog({
   }, "Ready to encrypt")), showHint && /*#__PURE__*/React.createElement("input", {
     className: "nf-overlay-input",
     type: "text",
+    maxLength: 200,
     placeholder: "Password hint (optional, stored unencrypted)",
     value: hint,
     onChange: e => setHint(e.target.value),

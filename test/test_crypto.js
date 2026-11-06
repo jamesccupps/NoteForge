@@ -145,6 +145,27 @@ const DATA = JSON.stringify({ notebooks: [{ id: "nb1", name: "Test", sections: [
     h.cleanup();
   }
 
+  section("Enable Encryption only over unencrypted data");
+  {
+    // A compromised renderer could call it directly: over a locked vault it encrypted
+    // "{}" (wiping the notes), over an unlocked one it re-keyed without the current password
+    const h = loadMain();
+    h.write("noteforge-data.json", DATA);
+    await h.invoke("enable-encryption", PW, "");
+    const before = h.read("noteforge-data.enc");
+    const h2 = h.restart();
+    t("refused while locked", !!(await h2.invoke("enable-encryption", "Attacker#Chosen-Pass1", "")).error);
+    t("locked vault untouched", h2.read("noteforge-data.enc") === before);
+    await h2.invoke("unlock-master", PW);
+    t("refused while unlocked", !!(await h2.invoke("enable-encryption", "Attacker#Chosen-Pass1", "")).error);
+    t("vault still opens with the real password", (await h2.restart().invoke("unlock-master", PW)).value === DATA);
+    h.cleanup();
+    const h3 = loadMain();
+    h3.write("noteforge-data.json", DATA);
+    t("hint over 200 characters refused", !!(await h3.invoke("enable-encryption", PW, "x".repeat(201))).error && !h3.exists("noteforge-data.enc"));
+    h3.cleanup();
+  }
+
   section("Change master password");
   {
     const h = loadMain();

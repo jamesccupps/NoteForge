@@ -15,7 +15,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   verifyMasterPassword: (pw) => ipcRenderer.invoke("verify-master-password", pw),
   checkPasswordStrength: (pw) => ipcRenderer.invoke("check-password-strength", pw),
   lockApp: () => ipcRenderer.invoke("lock-app"),
-  setHint: (hint) => ipcRenderer.invoke("set-hint", hint),
   // Notebook encryption
   encryptNotebookSections: (json, pw) => ipcRenderer.invoke("encrypt-notebook-sections", json, pw),
   decryptNotebookSections: (blob, pw) => ipcRenderer.invoke("decrypt-notebook-sections", blob, pw),

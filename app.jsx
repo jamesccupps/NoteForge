@@ -484,7 +484,7 @@ function PasswordDialog({title,subtitle,onSubmit,onCancel,confirmLabel,error,sho
           {extraErr&&<div style={{color:"var(--danger)",fontSize:11,marginTop:6}}>{extraErr}</div>}
           {allMet&&pw===pw2&&pw2.length>0&&<div style={{color:"var(--success)",fontSize:11,marginTop:6}}>Ready to encrypt</div>}
         </div>}
-        {showHint&&<input className="nf-overlay-input" type="text" placeholder="Password hint (optional, stored unencrypted)"
+        {showHint&&<input className="nf-overlay-input" type="text" maxLength={200} placeholder="Password hint (optional, stored unencrypted)"
           value={hint} onChange={e=>setHint(e.target.value)}
           style={{marginBottom:12,fontSize:12,opacity:.8}}/>}
       </>}
