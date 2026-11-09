@@ -31,6 +31,14 @@ if (fs.existsSync(npmPurify)) t("lib/purify.min.js is the npm build, byte for by
 t("lib/react.min.js is React 18.3.1", sha256(path.join(root, "lib", "react.min.js")) === "d949f1c3687aedadcedac85261865f29b17cd273997e7f6b2bfc53b2f9d4c4dd");
 t("lib/react-dom.min.js is ReactDOM 18.3.1", sha256(path.join(root, "lib", "react-dom.min.js")) === "35f4f974f4b2bcd44da73963347f8952e341f83909e4498227d4e26b98f66f0d");
 
+// Release builds are signed by scripts/azure-sign.js, and the updater checks the next
+// update was signed by the same publisher (publisherName goes into app-update.yml)
+const signOpts = pkg.build.win.signtoolOptions || {};
+t("Windows signing hook configured", signOpts.sign === "scripts/azure-sign.js" && fs.existsSync(path.join(root, signOpts.sign)));
+t("one SHA-256 signature per file", JSON.stringify(signOpts.signingHashAlgorithms) === '["sha256"]');
+t("updates must be signed by James Cupps", (signOpts.publisherName || []).includes("CN=James Cupps, O=James Cupps"));
+t("signing hook isn't packaged", !pkg.build.files.some((f) => f.startsWith("scripts")));
+
 for (const f of ["main.js", "preload.js", "app.js"]) {
   try { new vm.Script(fs.readFileSync(path.join(root, f), "utf-8")); t(`${f} syntactically valid`, true); }
   catch (e) { t(`${f} syntactically valid`, false, e.message); }

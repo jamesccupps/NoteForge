@@ -1,5 +1,8 @@
 name: Build and Release
 
+# A v* tag builds, signs and publishes a release. A tag ending in -signtest (e.g.
+# v2.9.1-signtest.1) runs the same signed build and checks but publishes nothing:
+# for testing signing changes without a release. Delete the test tag afterwards.
 on:
   push:
     tags:
@@ -14,9 +17,22 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  SIGN_TEST: ${{ contains(github.ref_name, '-signtest') }}
+
 jobs:
   build:
     runs-on: windows-latest
+    # Code signing: Azure Artifact Signing (account SlateAccount, profile Slate, the same
+    # certificate as Slate), signed in to with GitHub's OIDC token, so no password is
+    # stored anywhere. Azure trusts only jobs in this repository's "release" environment
+    # (subject repo:jamesccupps/NoteForge:environment:release), and the environment only
+    # v* tags. The secrets AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID say
+    # which app registration ("Slate signing"). scripts/azure-sign.js does the signing.
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
 
     steps:
       # Don't leave the write token in .git/config for npm ci, babel and the tests;
@@ -35,6 +51,7 @@ jobs:
       # A tag that doesn't match package.json would publish a latest.yml with the wrong
       # version (updaters would loop or skip)
       - name: Tag matches package.json
+        if: env.SIGN_TEST != 'true'
         shell: bash
         run: |
           v=$(node -p "require('./package.json').version")
@@ -51,11 +68,25 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Sign in to Azure (OIDC)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # The version scripts/azure-sign.js imports (the one azure/artifact-signing-action
+      # v2.0.0 uses for Slate)
+      - name: Install the ArtifactSigning module
+        shell: pwsh
+        run: Install-Module -Name ArtifactSigning -RequiredVersion 0.1.8 -Repository PSGallery -Scope CurrentUser -Force
+
       # electron-builder 26's PublishManager awaits between looking up and caching its GitHub
       # publisher, so concurrent uploads (installer, blockmap) each get one and each create a
       # release: v2.8.1 came out split across two releases from a single run. Create one draft
       # up front so every upload finds it, and publish it only once all assets are attached.
       - name: Create draft release
+        if: env.SIGN_TEST != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -64,17 +95,40 @@ jobs:
           awk -v v="$v" 'index($0, "## [" v "]")==1{f=1;next} /^## \[/{if(f)exit} f' CHANGELOG.md > release-notes.md
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$v" --notes-file release-notes.md
 
-      - name: Build and upload to the draft
+      # Each file is signed as electron-builder makes it (the app exe before it is packed,
+      # the uninstaller, the installer, the portable exe), so latest.yml's hash is the
+      # signed installer's
+      - name: Build, sign and upload to the draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --win --publish always
+          NOTEFORGE_AZURE_SIGN: "1"
+        run: npx electron-builder --win --publish ${{ env.SIGN_TEST == 'true' && 'never' || 'always' }}
 
       # The draft stays unpublished if the shipped exe lacks a fuse package.json asks for
       - name: Check fuses in the built exe
         run: node test/check_fuses.js
 
+      # ...or if anything shipped isn't validly signed by James Cupps, or the app wouldn't
+      # check its next update's signature
+      - name: Check signatures
+        shell: pwsh
+        run: |
+          $want = 'CN=James Cupps, O=James Cupps'
+          $files = @(Get-ChildItem dist -Filter *.exe) + @(Get-Item dist\win-unpacked\NoteForge.exe)
+          if ($files.Count -lt 3) { throw "expected the installer, the portable exe and the app exe, found: $($files.Name -join ', ')" }
+          foreach ($f in $files) {
+            $s = Get-AuthenticodeSignature $f.FullName
+            "$($f.Name): $($s.Status), $($s.SignerCertificate.Subject), timestamped: $([bool]$s.TimeStamperCertificate)"
+            if ($s.Status -ne 'Valid') { throw "$($f.Name) isn't validly signed: $($s.StatusMessage)" }
+            if (-not $s.SignerCertificate.Subject.StartsWith($want)) { throw "$($f.Name) is signed by $($s.SignerCertificate.Subject)" }
+            if (-not $s.TimeStamperCertificate) { throw "$($f.Name) has no timestamp" }
+          }
+          $yml = Get-Content dist\win-unpacked\resources\app-update.yml -Raw
+          if ($yml -notmatch [regex]::Escape($want)) { throw "app-update.yml has no publisherName, so the app wouldn't verify its updates:`n$yml" }
+
       - name: Publish the release
+        if: env.SIGN_TEST != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
