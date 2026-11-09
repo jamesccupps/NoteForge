@@ -17,7 +17,8 @@
 - **Encrypted backup** — Export/restore `.enc` backup files. Restore checks the backup password before touching anything and keeps a rollback copy of your current notes
 - **Crash-safe saves** — The data file is written to a temp file, flushed, and renamed into place, so a crash mid-save can't truncate it. If another program holds the file, the save is retried rather than written in place
 - **Earlier versions** — With encryption on, the vault as it was at each of the last 3 unlocks is kept (`noteforge-data.prev-1.enc` is the newest); open one with File → Restore from Backup
-- **Auto-update** — Checks GitHub Releases on launch, downloads and installs updates seamlessly
+- **Signed builds** — From 2.9.1 the installer, the portable exe and the app are code-signed by James Cupps (Azure Artifact Signing)
+- **Auto-update** — Checks GitHub Releases on launch, downloads and installs updates seamlessly; from 2.9.1 on, an update is installed only if it is signed by the same publisher
 - **Dark & light themes** — Persisted across sessions, applied to all dialogs
 - **Export** — HTML and plain text with unencrypted file warnings
 - **Keyboard shortcuts help** — Press F1 for a list of every shortcut
@@ -34,6 +35,8 @@
 ## What's new
 
 Full history is in [CHANGELOG.md](CHANGELOG.md).
+
+**2.9.1 (signed builds):** the installer, the portable exe and the app are code-signed by James Cupps, and from now on the app installs an update only if it carries that signature. No other changes from 2.9.0.
 
 **2.9.0 (review fixes):**
 - **Data loss fixed:**
@@ -94,7 +97,7 @@ Download the latest installer from [Releases](../../releases):
 
 Releases are built automatically by GitHub Actions — no manual build steps required.
 
-> **Note:** Windows may show a SmartScreen warning because the app isn't code-signed yet. Click **"More info"** → **"Run anyway"** to proceed. The source code is fully open for inspection.
+> **Note:** From 2.9.1 the installer and the app are signed by **James Cupps**. If SmartScreen still warns about a new release, **More info** shows that publisher. Releases up to 2.9.0 were unsigned.
 
 ### Uninstall
 

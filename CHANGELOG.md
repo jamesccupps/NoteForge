@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+## [2.9.1] — 2026-11-09
+
+Signed builds. The app is the same as 2.9.0.
+
+### Security
+- **The installer, the portable exe and the app are code-signed** by James Cupps (Azure Artifact Signing, with the same certificate as Slate). Windows shows the publisher, instead of an unknown one.
+- **Updates must carry that signature.** From this version on, NoteForge installs an update only if it is signed by `CN=James Cupps, O=James Cupps`. Until now, the only check was the download's hash in `latest.yml`.
+- **The release workflow refuses to publish unsigned files.** It checks that every shipped exe is validly signed and timestamped, and that the update check is configured, before publishing the release.
+
 ## [2.9.0] — 2026-11-06
 
 Fixes from an outside review of 2.8.2. Each bug was reproduced first, and each has a test that fails on 2.8.2.

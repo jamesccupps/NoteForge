@@ -119,7 +119,8 @@ jobs:
           if ($files.Count -lt 3) { throw "expected the installer, the portable exe and the app exe, found: $($files.Name -join ', ')" }
           foreach ($f in $files) {
             $s = Get-AuthenticodeSignature $f.FullName
-            "$($f.Name): $($s.Status), $($s.SignerCertificate.Subject), timestamped: $([bool]$s.TimeStamperCertificate)"
+            # (as an annotation, so the result can be read without signing in to GitHub)
+            "::notice title=Signature::$($f.Name): $($s.Status), $($s.SignerCertificate.Subject), timestamped: $([bool]$s.TimeStamperCertificate)"
             if ($s.Status -ne 'Valid') { throw "$($f.Name) isn't validly signed: $($s.StatusMessage)" }
             if (-not $s.SignerCertificate.Subject.StartsWith($want)) { throw "$($f.Name) is signed by $($s.SignerCertificate.Subject)" }
             if (-not $s.TimeStamperCertificate) { throw "$($f.Name) has no timestamp" }

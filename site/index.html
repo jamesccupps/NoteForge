@@ -157,7 +157,7 @@
         <p><a id="portable-link" href="https://github.com/jamesccupps/NoteForge/releases/latest">Download the portable exe</a> and run it from any folder or a USB stick. It keeps its notes in a <code>NoteForge Data</code> folder next to it, so they travel with it. To update, put the new exe in the same folder.</p>
       </div>
     </div>
-    <p class="note">NoteForge isn't code-signed yet, so Windows SmartScreen may warn on first run: choose <em>More info</em>, then <em>Run anyway</em>. The source and the build workflow are public.</p>
+    <p class="note">The installer and the app are code-signed by James Cupps, and NoteForge installs an update only if it carries the same signature. The source and the build workflow are public.</p>
   </section>
 
   <section>
@@ -196,7 +196,7 @@
       var setup = find(/^NoteForge-Setup-.*\.exe$/), portable = find(/-portable\.exe$/);
       if (setup) {
         document.getElementById("installer-link").href = setup;
-        if (!phone) { primary.href = setup; note.textContent = "NoteForge-Setup-" + v + ".exe"; }
+        if (!phone) { primary.href = setup; note.textContent = "NoteForge-Setup-" + v + ".exe, signed"; }
       }
       if (portable) { document.getElementById("portable-link").href = portable; document.getElementById("portable").href = portable; }
     }).catch(function () {});

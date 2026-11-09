@@ -37,7 +37,7 @@ Only the latest release (currently the 2.x line) receives security updates. Olde
 - Reports that require already having decrypted keys in memory and then demonstrating those keys are in memory.
 - Reports about dependency CVEs that have no realistic exploit path given how the dependency is used (for example, a server-side CVE in a client-bundled library that never runs in that context). Include an exploitation path for these.
 - Denial of service against the local app itself by the local user (e.g., forcing the app to refuse to open a file you control).
-- SmartScreen / code-signing warnings. Known — this app isn't yet code-signed. Mitigation is on the roadmap.
+- SmartScreen warnings on versions up to 2.9.0, which were unsigned. From 2.9.1 the builds are code-signed (publisher James Cupps) and the updater installs only updates signed by that publisher; a signing problem in a current release *is* in scope.
 
 ## Cryptographic details
 
