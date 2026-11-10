@@ -65,6 +65,14 @@
   .btn small { font-weight: 400; opacity: .75; font-size: 13px; }
   .sub { color: #c9c4f2; font-size: 14px; margin-top: 12px; }
   .sub a { color: #e4e1ff; }
+  .scoop { margin-top: 16px; max-width: 680px; }
+  .scoop p { color: #c9c4f2; font-size: 14px; margin: 0 0 6px; }
+  .scoop a { color: #e4e1ff; }
+  .scoop pre { margin: 0; padding: 10px 14px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; overflow-x: auto; }
+  .scoop code { background: none; padding: 0; color: #fff; font: 14px/1.6 Consolas, monospace; }
+  #scoop-card { grid-column: 1 / -1; }
+  .card pre { margin: 8px 0; padding: 10px 12px; background: var(--code); border-radius: 6px; overflow-x: auto; }
+  .card pre code { background: none; padding: 0; font-size: 13px; line-height: 1.6; }
   .demo { margin: 34px 0 0; }
   .demo img { width: 100%; height: auto; display: block; border-radius: 8px; box-shadow: 0 18px 50px rgba(0,0,0,.5); }
   section { padding: 44px 0 8px; }
@@ -106,6 +114,11 @@
       <a class="btn ghost" href="https://github.com/jamesccupps/NoteForge">Source on GitHub</a>
     </div>
     <p class="sub"><span id="version">Free and open source (MIT).</span> Windows 10 and 11, 64-bit. <a href="https://github.com/jamesccupps/NoteForge/releases">All releases</a></p>
+    <div class="scoop">
+      <p>Or with <a href="https://scoop.sh">Scoop</a>:</p>
+      <pre><code>scoop bucket add jamesccupps https://github.com/jamesccupps/scoop-bucket
+scoop install jamesccupps/noteforge</code></pre>
+    </div>
     <div class="demo"><img src="images/noteforge-dark.png" width="1600" height="917" alt="NoteForge in the dark theme: notebooks and sections on the left, the pages of the Home lab section in the middle, and a note with a checklist, a table, highlighted text and a code block"></div>
   </div>
 </header>
@@ -155,6 +168,13 @@
       <div class="card" id="portable-card">
         <h3>Portable</h3>
         <p><a id="portable-link" href="https://github.com/jamesccupps/NoteForge/releases/latest">Download the portable exe</a> and run it from any folder or a USB stick. It keeps its notes in a <code>NoteForge Data</code> folder next to it, so they travel with it. To update, put the new exe in the same folder.</p>
+      </div>
+      <div class="card" id="scoop-card">
+        <h3>Scoop</h3>
+        <p>With <a href="https://scoop.sh">Scoop</a>, which installs the portable version:</p>
+        <pre><code>scoop bucket add jamesccupps https://github.com/jamesccupps/scoop-bucket
+scoop install jamesccupps/noteforge</code></pre>
+        <p>Your notes are kept in <code>~\scoop\persist\noteforge</code>, so they survive updates. To update, run <code>scoop update noteforge</code>.</p>
       </div>
     </div>
     <p class="note">The installer and the app are code-signed by James Cupps, and NoteForge installs an update only if it carries the same signature. The source and the build workflow are public.</p>

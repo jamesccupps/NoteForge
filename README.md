@@ -99,6 +99,17 @@ Releases are built automatically by GitHub Actions — no manual build steps req
 
 > **Note:** From 2.9.1 the installer and the app are signed by **James Cupps**. If SmartScreen still warns about a new release, **More info** shows that publisher. Releases up to 2.9.0 were unsigned.
 
+### Install with Scoop
+
+With [Scoop](https://scoop.sh) (see its site to install Scoop itself):
+
+```powershell
+scoop bucket add jamesccupps https://github.com/jamesccupps/scoop-bucket
+scoop install jamesccupps/noteforge
+```
+
+This installs the portable version and a Start menu shortcut. Scoop keeps its `NoteForge Data` folder in `~\scoop\persist\noteforge`, so your notes survive updates. When NoteForge says a new version is out, run `scoop update noteforge`.
+
 ### Uninstall
 
 Uninstalling removes the program but **keeps your notes**, so a reinstall picks them up again. To keep a copy before removing anything, use **File → Export Backup** first.
@@ -116,6 +127,8 @@ Uninstalling removes the program but **keeps your notes**, so a reinstall picks 
 4. Optionally, delete `%LOCALAPPDATA%\noteforge-updater`. It holds downloaded update installers, and the uninstaller leaves it behind.
 
 **Portable version:** delete the exe and the `NoteForge Data` folder next to it. Portable builds before 2.9.0 kept their notes in `%APPDATA%\noteforge`, like the installed version.
+
+**Scoop:** `scoop uninstall noteforge` keeps your notes in `~\scoop\persist\noteforge`; `scoop uninstall noteforge --purge` deletes them too.
 
 ### Build from Source
 
@@ -249,6 +262,7 @@ To update the bundled DOMPurify: bump the exact `dompurify` version in `package.
 | macOS | `~/Library/Application Support/noteforge/` |
 | Linux | `~/.config/noteforge/` |
 | Portable build | `NoteForge Data` next to the portable exe |
+| Scoop | `~\scoop\persist\noteforge\NoteForge Data` |
 
 Files: `noteforge-data.json` (unencrypted) or `noteforge-data.enc` (encrypted), `window-state.json`, `ratelimit.json`, `noteforge-hint.txt`, `noteforge-config.json`, `noteforge-data.enc.pre-restore.bak` / `noteforge-data.json.pre-restore.bak` (after a restore, for rollback), `noteforge-data.prev-1.enc` to `prev-3.enc` (the encrypted vault at each of the last 3 unlocks; removed when the master password changes or encryption is turned off). A `*.tmp` file exists only for the moment a save is being written.
 
