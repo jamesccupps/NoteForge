@@ -93,7 +93,7 @@ jobs:
         run: |
           v="${GITHUB_REF_NAME#v}"
           awk -v v="$v" 'index($0, "## [" v "]")==1{f=1;next} /^## \[/{if(f)exit} f' CHANGELOG.md > release-notes.md
-          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$v" --notes-file release-notes.md
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "NoteForge $v" --notes-file release-notes.md
 
       # Each file is signed as electron-builder makes it (the app exe before it is packed,
       # the uninstaller, the installer, the portable exe), so latest.yml's hash is the
