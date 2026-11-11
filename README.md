@@ -6,7 +6,7 @@
 
 **Encrypted, offline note-taking for Windows.** A OneNote-style desktop app (Windows 10 and 11) that keeps your data local and protected with AES-256-GCM encryption.
 
-**[⬇ Download for Windows](https://github.com/jamesccupps/NoteForge/releases/latest)** (installer or portable exe, signed) · [Website](https://jamesccupps.github.io/NoteForge/) · [Install with Scoop](#install)
+**[⬇ Download for Windows](https://github.com/jamesccupps/NoteForge/releases/latest/download/NoteForge-Setup.exe)** (signed installer) · [Portable exe](https://github.com/jamesccupps/NoteForge/releases/latest/download/NoteForge-portable.exe) · [Website](https://jamesccupps.github.io/NoteForge/) · [Install with Scoop](#install)
 
 ![NoteForge in the dark theme](docs/screenshots/noteforge-dark.png)
 

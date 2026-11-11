@@ -28,7 +28,7 @@
   "description": "Encrypted, offline note-taking for Windows: notebooks, sections and pages, AES-256-GCM with a master password, and an optional password per notebook.",
   "url": "https://jamesccupps.github.io/NoteForge/",
   "codeRepository": "https://github.com/jamesccupps/NoteForge",
-  "downloadUrl": "https://github.com/jamesccupps/NoteForge/releases/latest",
+  "downloadUrl": "https://github.com/jamesccupps/NoteForge/releases/latest/download/NoteForge-Setup.exe",
   "applicationCategory": "ProductivityApplication",
   "applicationSubCategory": "Note-taking",
   "operatingSystem": "Windows 10, Windows 11",
@@ -120,8 +120,8 @@
     <p class="tagline">Encrypted, offline notes for Windows.</p>
     <p class="facts">Notebooks, sections and pages, like OneNote, kept on your own PC and encrypted with a master password. Give any notebook its own password too. No account, no cloud, no tracking.</p>
     <div class="actions">
-      <a class="btn" id="primary" href="https://github.com/jamesccupps/NoteForge/releases/latest">Download for Windows <small id="primary-note">installer</small></a>
-      <a class="btn ghost" id="portable" href="https://github.com/jamesccupps/NoteForge/releases/latest">Portable version</a>
+      <a class="btn" id="primary" href="https://github.com/jamesccupps/NoteForge/releases/latest/download/NoteForge-Setup.exe">Download for Windows <small id="primary-note">installer</small></a>
+      <a class="btn ghost" id="portable" href="https://github.com/jamesccupps/NoteForge/releases/latest/download/NoteForge-portable.exe">Portable version</a>
       <a class="btn ghost" href="https://github.com/jamesccupps/NoteForge">Source on GitHub</a>
     </div>
     <p class="sub"><span id="version">Free and open source (MIT).</span> Windows 10 and 11, 64-bit. <a href="https://github.com/jamesccupps/NoteForge/releases">All releases</a></p>
@@ -174,11 +174,11 @@ scoop install jamesccupps/noteforge</code></pre>
     <div class="install">
       <div class="card" id="installer">
         <h3>Installer (recommended)</h3>
-        <p><a id="installer-link" href="https://github.com/jamesccupps/NoteForge/releases/latest">Download the installer</a> and run it; no administrator rights needed. NoteForge checks for updates when it starts and installs them when you say so.</p>
+        <p><a id="installer-link" href="https://github.com/jamesccupps/NoteForge/releases/latest/download/NoteForge-Setup.exe">Download the installer</a> and run it; no administrator rights needed. NoteForge checks for updates when it starts and installs them when you say so.</p>
       </div>
       <div class="card" id="portable-card">
         <h3>Portable</h3>
-        <p><a id="portable-link" href="https://github.com/jamesccupps/NoteForge/releases/latest">Download the portable exe</a> and run it from any folder or a USB stick. It keeps its notes in a <code>NoteForge Data</code> folder next to it, so they travel with it. To update, put the new exe in the same folder.</p>
+        <p><a id="portable-link" href="https://github.com/jamesccupps/NoteForge/releases/latest/download/NoteForge-portable.exe">Download the portable exe</a> and run it from any folder or a USB stick. It keeps its notes in a <code>NoteForge Data</code> folder next to it, so they travel with it. To update, put the new exe in the same folder.</p>
       </div>
       <div class="card" id="scoop-card">
         <h3>Scoop</h3>
@@ -222,20 +222,23 @@ scoop install jamesccupps/noteforge</code></pre>
   var windows = /Win/i.test(platform) || /Windows/i.test(ua);
   var primary = document.getElementById("primary"), note = document.getElementById("primary-note");
   if (phone) {
+    // A phone can't run the installer: show the release page instead of downloading it
+    primary.href = RELEASES;
     primary.firstChild.nodeValue = "Get NoteForge for your PC ";
     note.textContent = "Windows";
   } else if (!windows) {
     note.textContent = "Windows only for now";
   }
-  // The file names carry the version, so the links come from the latest release.
-  // (The page works without this: every link falls back to the releases page.)
+  // The links name the latest release's versioned files, and the button shows the version.
+  // (The page works without this: the links in the HTML are the unversioned copies every
+  // release carries, which releases/latest/download/ always resolves to the newest.)
   try {
     fetch("https://api.github.com/repos/jamesccupps/NoteForge/releases/latest").then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       if (!d) return;
       var v = (d.tag_name || "").replace(/^v/, "");
       if (v) document.getElementById("version").textContent = "Version " + v + ", free and open source (MIT).";
       var find = function (re) { var a = (d.assets || []).filter(function (x) { return re.test(x.name); })[0]; return a && a.browser_download_url; };
-      var setup = find(/^NoteForge-Setup-.*\.exe$/), portable = find(/-portable\.exe$/);
+      var setup = find(/^NoteForge-Setup-.*\.exe$/), portable = find(/^NoteForge-\d[^/]*-portable\.exe$/);
       if (setup) {
         document.getElementById("installer-link").href = setup;
         if (!phone) { primary.href = setup; note.textContent = "NoteForge-Setup-" + v + ".exe, signed"; }
