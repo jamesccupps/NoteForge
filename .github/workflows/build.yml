@@ -140,7 +140,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           v="${GITHUB_REF_NAME#v}"
-          cp "dist/NoteForge-Setup-$v.exe" dist/NoteForge-Setup.exe
+          # On disk the installer is "NoteForge Setup X.Y.Z.exe" (electron-builder's default
+          # name); only its upload is called NoteForge-Setup-X.Y.Z.exe. v2.9.2's first run
+          # failed here on the uploaded name, and stayed a draft.
+          cp "dist/NoteForge Setup $v.exe" dist/NoteForge-Setup.exe
           cp "dist/NoteForge-$v-portable.exe" dist/NoteForge-portable.exe
           gh release upload "$GITHUB_REF_NAME" dist/NoteForge-Setup.exe dist/NoteForge-portable.exe
 
