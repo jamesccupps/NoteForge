@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+## [2.9.2] — 2026-11-11
+
+Electron security fixes. The app is otherwise the same as 2.9.1.
+
+### Security
+- **Electron 44.11.1** (from 44.10.2). Electron 44.11.0 and 44.11.1 backport fixes from upstream Chromium, V8, ANGLE, Dawn, FFmpeg, PDFium and Skia.
+
+### Changed
+- **A download link that always gets the newest version.** Each release also carries `NoteForge-Setup.exe` and `NoteForge-portable.exe`, copies of that release's versioned files, so https://github.com/jamesccupps/NoteForge/releases/latest/download/NoteForge-Setup.exe always downloads the latest installer.
+
 ## [2.9.1] — 2026-11-09
 
 Signed builds. The app is the same as 2.9.0.
