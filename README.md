@@ -1,8 +1,14 @@
 # NoteForge
 
+[![Test](https://github.com/jamesccupps/NoteForge/actions/workflows/test.yml/badge.svg)](https://github.com/jamesccupps/NoteForge/actions/workflows/test.yml)
+[![Latest release](https://img.shields.io/github/v/release/jamesccupps/NoteForge?label=release)](https://github.com/jamesccupps/NoteForge/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **Encrypted, offline note-taking for Windows.** A OneNote-style desktop app (Windows 10 and 11) that keeps your data local and protected with AES-256-GCM encryption.
 
-**Website and download:** [jamesccupps.github.io/NoteForge](https://jamesccupps.github.io/NoteForge/)
+**[⬇ Download for Windows](https://github.com/jamesccupps/NoteForge/releases/latest)** (installer or portable exe, signed) · [Website](https://jamesccupps.github.io/NoteForge/) · [Install with Scoop](#install)
+
+![NoteForge in the dark theme](docs/screenshots/noteforge-dark.png)
 
 ## Features
 
@@ -27,8 +33,6 @@
 - **DOMPurify + hardening hook** — All note content sanitized on load, paste and drop; inputs other than checkboxes, the app's own CSS classes and fixed positioning are removed so a note can't imitate the app; images limited to inline `data:` images; links to web and email addresses
 
 ## Screenshots
-
-![NoteForge in the dark theme](docs/screenshots/noteforge-dark.png)
 
 ![NoteForge in the light theme](docs/screenshots/noteforge-light.png)
 
@@ -90,7 +94,7 @@ Full history is in [CHANGELOG.md](CHANGELOG.md).
 
 ### Download (Windows)
 
-Download the latest installer from [Releases](../../releases):
+Download the latest installer from [Releases](https://github.com/jamesccupps/NoteForge/releases/latest):
 
 - **`NoteForge-Setup-x.x.x.exe`** — Standard Windows installer (recommended)
 - **`NoteForge-x.x.x-portable.exe`** — Portable version, no install needed. It keeps its notes in a `NoteForge Data` folder next to the exe, so they travel with it (from 2.9.0; on first run it offers to copy notes found on the PC). It doesn't update itself: when a new version is out it opens the download page, and the new exe goes in the same folder
