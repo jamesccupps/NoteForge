@@ -41,7 +41,9 @@ no Scoop work as long as these hold:
 
 - Tag releases `vX.Y.Z` and publish them as the latest release, never as a pre-release.
 - Keep the release file names unchanged. The bucket downloads `NoteForge-<version>-portable.exe`; electron-updater
-  reads `latest.yml`, `NoteForge-Setup-<version>.exe` and its `.blockmap`.
+  reads `latest.yml`, `NoteForge-Setup-<version>.exe` and its `.blockmap`. Each release also carries unversioned
+  copies, `NoteForge-Setup.exe` and `NoteForge-portable.exe` (the workflow's "Attach unversioned copies" step), so
+  `releases/latest/download/NoteForge-Setup.exe` is a stable one-click link. They're extra files, not renames.
 - There is no checksum file to keep publishing: Scoop hashes the portable exe itself, and `latest.yml` carries the
   installer's SHA-512.
 - Sign files BEFORE publishing. Never replace a file on a release that's already out: Scoop and winget have

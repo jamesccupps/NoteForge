@@ -128,6 +128,22 @@ jobs:
           $yml = Get-Content dist\win-unpacked\resources\app-update.yml -Raw
           if ($yml -notmatch [regex]::Escape($want)) { throw "app-update.yml has no publisherName, so the app wouldn't verify its updates:`n$yml" }
 
+      # Unversioned copies of the installer and the portable exe, so
+      # releases/latest/download/NoteForge-Setup.exe (and NoteForge-portable.exe) always
+      # fetch the newest release: a one-click link for the README and the site. The
+      # versioned files stay as they are; latest.yml (the auto-updater) and the Scoop
+      # manifest name them. The copies are the files just checked, byte for byte.
+      - name: Attach unversioned copies
+        if: env.SIGN_TEST != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          cp "dist/NoteForge-Setup-$v.exe" dist/NoteForge-Setup.exe
+          cp "dist/NoteForge-$v-portable.exe" dist/NoteForge-portable.exe
+          gh release upload "$GITHUB_REF_NAME" dist/NoteForge-Setup.exe dist/NoteForge-portable.exe
+
       - name: Publish the release
         if: env.SIGN_TEST != 'true'
         shell: bash
