@@ -11,6 +11,8 @@ const {
    ═══════════════════════════════════════════════════════════════ */
 const SCHEMA_VERSION = 1; // bump if notebook/section/page shape changes; used for safe migrations
 const SAVE_RETRY_MS = 3000; // after a save that wasn't written
+const LOCK_SAVE_TRIES = 3; // Lock tries an unwritable save this many times, a second apart, then stays unlocked
+const AUTOLOCK_RETRY_MS = 30000; // auto-lock that had to stay unlocked tries again this often
 // Set once the first-run master password offer was answered (its own key: the prefs
 // object is rewritten whole by the prefs effect)
 const FIRST_RUN_KEY = "noteforge-encryption-offered";
@@ -1631,11 +1633,25 @@ function NoteForge() {
     setRestoreFlow(null);
     setPwError("");
   }, []);
+
+  // Flushes what's pending, then locks. If the latest edits can't be written (the file held
+  // by another program), locking would throw them away with the session, so it stays
+  // unlocked, as Re-lock does, and returns false; saveNow's retry keeps trying meanwhile.
   const lockApp = useCallback(async () => {
-    if (saveTimer.current && dataRef.current) {
+    let fails = 0;
+    while (saveTimer.current && dataRef.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
-      await saveNow(dataRef.current);
+      const r = await saveNow(dataRef.current);
+      if (r.ok) continue; // (anything typed meanwhile is pending again: save that too)
+      if (++fails >= LOCK_SAVE_TRIES) {
+        alertUser({
+          title: "Couldn't lock",
+          message: "Your latest changes couldn't be saved (another program may be holding the notes file), so NoteForge stays unlocked rather than lose them. It keeps trying to save: lock again once the status bar says Saved."
+        });
+        return false;
+      }
+      await new Promise(res => setTimeout(res, 1000));
     }
     if (window.electronAPI?.lockApp) await window.electronAPI.lockApp();
     resetSession();
@@ -1646,6 +1662,7 @@ function NoteForge() {
     setAPg(null);
     prevPgRef.current = null; // Force editor to repaint content after unlock even if we land on the same page id
     if (encEnabled) setAppPhase("needsPassword");
+    return true;
   }, [encEnabled]);
 
   // Reset idle timer on any user interaction (throttled to ~1 Hz so mousemove
@@ -1659,7 +1676,11 @@ function NoteForge() {
       if (now - lastReset < 1000) return;
       lastReset = now;
       if (idleTimer.current) clearTimeout(idleTimer.current);
-      idleTimer.current = setTimeout(() => lockApp(), ms);
+      // (if it had to stay unlocked to keep unsaved edits, try again until it can lock)
+      const autoLock = async () => {
+        if (!(await lockApp())) idleTimer.current = setTimeout(autoLock, AUTOLOCK_RETRY_MS);
+      };
+      idleTimer.current = setTimeout(autoLock, ms);
     };
     reset();
     const events = ["mousedown", "mousemove", "keydown", "scroll", "wheel", "touchstart"];

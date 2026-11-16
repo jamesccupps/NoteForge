@@ -1359,6 +1359,43 @@ SCENARIOS.failedSaveIsRetried = {
   },
 };
 
+// Lock (and auto-lock) with edits that can't be saved, the file held by another program:
+// the app stays unlocked rather than throw them away, and locks once they're written.
+SCENARIOS.lockKeepsUnsavedEdits = {
+  seed: seedBase,
+  async run(c) {
+    const fs = require("fs");
+    const MPW = "Master!Passw0rd-e2e";
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const r = await c.js(`window.electronAPI.enableEncryption(${JSON.stringify(MPW)},"")`);
+    c.check("enable encryption", r && r.success, JSON.stringify(r));
+    c.win.webContents.reload();
+    await c.sleep(500);
+    const unlockMaster = async () => {
+      await c.waitFor(`document.querySelector(".nf-overlay-input")`);
+      await c.js(R.type(`document.querySelector(".nf-overlay-input")`, MPW));
+      await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
+      await c.waitFor(`document.querySelector(".nf-editor")`);
+    };
+    await unlockMaster();
+    const realRename = fs.renameSync; // main.js shares this module
+    fs.renameSync = () => { const e = new Error("EPERM: operation not permitted, rename"); e.code = "EPERM"; throw e; };
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML="<p>held-edit</p>";ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+    await c.waitFor(`document.body.innerText.includes("Save failed")`, 5000).catch(() => {});
+    c.menu("lock-app");
+    await c.waitFor(`document.body.innerText.includes("Couldn't lock")`, 8000).catch(() => {});
+    c.check("Lock says it couldn't lock", await c.js(`document.body.innerText.includes("Couldn't lock")`));
+    c.check("...and stays unlocked, the edit still on screen", await c.js(`!document.querySelector(".nf-overlay-input")&&document.querySelector(".nf-editor").textContent.includes("held-edit")`));
+    fs.renameSync = realRename;
+    await c.waitFor(`document.body.innerText.includes("Saved")&&!document.body.innerText.includes("Save failed")`, 8000).catch(() => {});
+    c.check("the retry writes it once the file is free", await c.js(`!document.body.innerText.includes("Save failed")`));
+    await c.js(`${R.button(".nf-modal button, .nf-dialog button", "OK")}?.click()`).catch(() => {});
+    c.menu("lock-app");
+    await unlockMaster();
+    c.check("after Lock and unlock the edit is there", (await c.js(R.editorText)).includes("held-edit"), await c.js(R.editorText));
+  },
+};
+
 // The portable build keeps its data beside the exe, not in this PC's profile folder.
 // Runs the app twice as the portable build (PORTABLE_EXECUTABLE_DIR set, as the
 // portable launcher does), with this scenario's folder as the PC's profile folder.
