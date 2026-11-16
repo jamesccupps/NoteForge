@@ -1997,6 +1997,9 @@ function NoteForge(){
     const my=Math.min(edCtx.y,window.innerHeight-320);
     const hasSel=window.getSelection()?.toString()?.length>0;
     const doCmd=(cmd)=>{exec(cmd);setEdCtx(null)};
+    // (the items greyed out with no selection: clicked anyway, they did nothing visible but
+    // toggled the style of what's typed next)
+    const doSelCmd=(cmd)=>{if(hasSel)exec(cmd);setEdCtx(null)};
     return <div className="nf-ctx fade-in" style={{left:mx,top:my}}>
       <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>{if(hasSel){document.execCommand("cut");setTimeout(()=>onInput(),10)}setEdCtx(null)}}><I n="scissors" s={13}/> Cut <span style={{marginLeft:"auto",fontSize:10,color:"var(--text-muted)"}}>Ctrl+X</span></div>
       <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>{if(hasSel)document.execCommand("copy");setEdCtx(null)}}><I n="copy" s={13}/> Copy <span style={{marginLeft:"auto",fontSize:10,color:"var(--text-muted)"}}>Ctrl+C</span></div>
@@ -2005,14 +2008,14 @@ function NoteForge(){
       <div className="nf-ctx-item" onClick={()=>{edRef.current?.focus();window.electronAPI?.paste?.();setEdCtx(null)}}><I n="clipboard" s={13}/> Paste <span style={{marginLeft:"auto",fontSize:10,color:"var(--text-muted)"}}>Ctrl+V</span></div>
       <div className="nf-ctx-item" onClick={()=>{document.execCommand("selectAll");setEdCtx(null)}}><I n="check" s={13}/> Select All</div>
       <div className="nf-ctx-sep"/>
-      <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doCmd("bold")}><I n="bold" s={13}/> Bold</div>
-      <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doCmd("italic")}><I n="italic" s={13}/> Italic</div>
-      <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doCmd("underline")}><I n="underline" s={13}/> Underline</div>
+      <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doSelCmd("bold")}><I n="bold" s={13}/> Bold</div>
+      <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doSelCmd("italic")}><I n="italic" s={13}/> Italic</div>
+      <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doSelCmd("underline")}><I n="underline" s={13}/> Underline</div>
       <div className="nf-ctx-sep"/>
       <div className="nf-ctx-item" onClick={()=>{insertLink();setEdCtx(null)}}><I n="link" s={13}/> Insert Link</div>
       <div className="nf-ctx-item" onClick={()=>{insertTable();setEdCtx(null)}}><I n="table" s={13}/> Insert Table</div>
       <div className="nf-ctx-sep"/>
-      <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doCmd("removeFormat")}><I n="eraser" s={13}/> Clear Formatting</div>
+      <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>doSelCmd("removeFormat")}><I n="eraser" s={13}/> Clear Formatting</div>
     </div>;
   })()}
 

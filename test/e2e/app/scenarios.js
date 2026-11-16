@@ -1292,6 +1292,34 @@ SCENARIOS.damagedVaultOffersRestore = {
   },
 };
 
+// The editor menu's Bold, Italic, Underline and Clear Formatting are greyed out with no
+// selection, but ran anyway when clicked (Bold then toggled the style of what's typed next).
+SCENARIOS.greyedEditorItemsDoNothing = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const open = () => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const r=document.createRange();
+      r.selectNodeContents(ed);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r);
+      ed.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,clientX:400,clientY:300}))})()`);
+    for (const item of ["Bold", "Italic", "Underline"]) {
+      await open();
+      await c.sleep(200);
+      c.check(`${item} is greyed out with no selection`, await c.js(`${R.ctxItem(item)}.classList.contains("disabled")`));
+      await c.js(`${R.ctxItem(item)}.click()`);
+      await c.sleep(150);
+      c.check(`...and clicking it changes nothing`, !(await c.js(`document.queryCommandState(${JSON.stringify(item.toLowerCase())})`)));
+    }
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const r=document.createRange();
+      r.selectNodeContents(ed.querySelector("p"));const s=getSelection();s.removeAllRanges();s.addRange(r);
+      ed.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,clientX:400,clientY:300}))})()`);
+    await c.sleep(200);
+    await c.js(`${R.ctxItem("Bold")}.click()`);
+    await c.sleep(150);
+    c.check("with text selected, Bold still bolds it", await c.js(`!!document.querySelector(".nf-editor b, .nf-editor strong")`),
+      await c.js(`document.querySelector(".nf-editor").innerHTML`));
+  },
+};
+
 // A page without times (a hand-edited or restored file) showed "Invalid Date" and sorted
 // unpredictably: normalizeData didn't fill them in.
 SCENARIOS.pageWithoutTimes = {

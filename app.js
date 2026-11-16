@@ -4399,6 +4399,12 @@ function NoteForge() {
       exec(cmd);
       setEdCtx(null);
     };
+    // (the items greyed out with no selection: clicked anyway, they did nothing visible but
+    // toggled the style of what's typed next)
+    const doSelCmd = cmd => {
+      if (hasSel) exec(cmd);
+      setEdCtx(null);
+    };
     return /*#__PURE__*/React.createElement("div", {
       className: "nf-ctx fade-in",
       style: {
@@ -4467,19 +4473,19 @@ function NoteForge() {
       className: "nf-ctx-sep"
     }), /*#__PURE__*/React.createElement("div", {
       className: `nf-ctx-item${!hasSel ? " disabled" : ""}`,
-      onClick: () => doCmd("bold")
+      onClick: () => doSelCmd("bold")
     }, /*#__PURE__*/React.createElement(I, {
       n: "bold",
       s: 13
     }), " Bold"), /*#__PURE__*/React.createElement("div", {
       className: `nf-ctx-item${!hasSel ? " disabled" : ""}`,
-      onClick: () => doCmd("italic")
+      onClick: () => doSelCmd("italic")
     }, /*#__PURE__*/React.createElement(I, {
       n: "italic",
       s: 13
     }), " Italic"), /*#__PURE__*/React.createElement("div", {
       className: `nf-ctx-item${!hasSel ? " disabled" : ""}`,
-      onClick: () => doCmd("underline")
+      onClick: () => doSelCmd("underline")
     }, /*#__PURE__*/React.createElement(I, {
       n: "underline",
       s: 13
@@ -4507,7 +4513,7 @@ function NoteForge() {
       className: "nf-ctx-sep"
     }), /*#__PURE__*/React.createElement("div", {
       className: `nf-ctx-item${!hasSel ? " disabled" : ""}`,
-      onClick: () => doCmd("removeFormat")
+      onClick: () => doSelCmd("removeFormat")
     }, /*#__PURE__*/React.createElement(I, {
       n: "eraser",
       s: 13
