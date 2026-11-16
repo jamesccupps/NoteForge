@@ -16,6 +16,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 ### Security
 - **A password change removes the restore's rollback copy.** Restore from Backup keeps the vault as it was before (`noteforge-data.enc.pre-restore.bak`), under the password it had then. Changing the master password deleted the earlier versions but not this copy, so the old password still opened the old notes. It's now removed with them, and when encryption is turned off.
 - **The guard that keeps a password-protected notebook's pages out of the saved file** gave up, and wrote them, when the notes held an empty entry where a notebook should be. The app never writes one, so this needed a bug or a tampered renderer to matter; it's fixed so the guard holds either way.
+- **The release build runs no package install scripts.** The job that signs and publishes installs its dependencies with `npm ci --ignore-scripts`, and the workflow's default permission is read-only.
 
 ## [2.9.2] — 2026-11-11
 

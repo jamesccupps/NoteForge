@@ -8,8 +8,9 @@ on:
     tags:
       - 'v*'
 
+# Read-only by default; the one job asks for what it needs
 permissions:
-  contents: write
+  contents: read
 
 # The v2.8.0 tag push produced two runs; serialise per tag so a duplicate run waits
 # instead of racing the first one.
@@ -57,9 +58,12 @@ jobs:
           v=$(node -p "require('./package.json').version")
           if [ "v$v" != "$GITHUB_REF_NAME" ]; then echo "::error::tag $GITHUB_REF_NAME but package.json says $v"; exit 1; fi
 
-      # npm ci installs exactly what package-lock.json records
+      # npm ci installs exactly what package-lock.json records. --ignore-scripts: no package
+      # runs code at install time in this job, which can sign and publish. The only install
+      # script in the tree is electron-winstaller's (it picks a 7-Zip for the Squirrel target,
+      # which this build doesn't make); Electron itself has none.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Compile JSX
         run: npm run build:jsx
