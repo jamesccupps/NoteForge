@@ -218,7 +218,8 @@ function sanitizeDataJson(jsonStr) {
   try {
     const data = JSON.parse(jsonStr);
     if (data?.notebooks) {
-      data.notebooks = data.notebooks.map(nb => nb.locked ? { ...nb, sections: [] } : nb);
+      // (nb?.: a null entry threw here, and the catch returned the save unstripped)
+      data.notebooks = data.notebooks.map(nb => nb?.locked ? { ...nb, sections: [] } : nb);
     }
     return JSON.stringify(data);
   } catch { return jsonStr; }

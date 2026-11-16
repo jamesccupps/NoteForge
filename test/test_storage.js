@@ -199,6 +199,20 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
     h.cleanup();
   }
 
+  section("A locked notebook's pages are stripped even beside a null entry");
+  {
+    // stripLockedSections spots the leak (nb?.locked) and hands it to sanitizeDataJson, which
+    // read nb.locked, threw on the null entry and returned the save unchanged: the locked
+    // notebook's plaintext pages were written as they were
+    const h = loadMain();
+    const leak = JSON.stringify({ notebooks: [null, { id: "nb-x", name: "Locked", locked: true, encSections: "e",
+      sections: [{ id: "s", name: "S", pages: [{ id: "p", title: "P", content: "<p>TOPSECRET-PLAINTEXT</p>" }] }] }] });
+    const r = await h.invoke("storage-set", leak);
+    t("save accepted", r.ok === true, JSON.stringify(r));
+    t("...without the locked notebook's pages", !h.read("noteforge-data.json").includes("TOPSECRET-PLAINTEXT"));
+    h.cleanup();
+  }
+
   section("Settings files of the wrong shape fall back to the defaults");
   {
     // Valid JSON that isn't an object (null, a list, a string) used to be returned as is:
