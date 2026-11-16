@@ -50,6 +50,10 @@ const vaultValue = async (h, pw) => (await h.restart().invoke("unlock-master", p
     const meta = doc.indexOf('http-equiv="Content-Security-Policy"');
     t("export has a CSP meta in its head", meta > 0 && meta < doc.indexOf("</head>"));
     t("...that blocks scripts and remote loads", /default-src 'none'/.test(doc) && /img-src data:/.test(doc) && !/script-src/.test(doc));
+    // Right-to-left notes read right in the export too: each paragraph's direction from its
+    // own text unless it has a dir, and quote bars on the reading side
+    t("export sets each paragraph's direction from its text", /unicode-bidi:plaintext;text-align:start/.test(doc) && /:not\(\[dir\]\)/.test(doc));
+    t("...with logical quote bars", /blockquote\{border-inline-start:/.test(doc) && !/border-left/.test(doc));
     h.cleanup();
   }
 

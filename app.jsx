@@ -145,6 +145,11 @@ function installDOMPurifyHook(){
       for(let i=st.length-1;i>=0;i--){const p=st.item(i);if(OUT_OF_BOX_STYLE.test(p))st.removeProperty(p)}
       if(st.cssText)data.attrValue=st.cssText;else data.keepAttr=false;
     }
+    // Writing direction (a right-to-left paragraph or list): the three values HTML has
+    if(data.attrName==="dir"){
+      const v=String(data.attrValue).trim().toLowerCase();
+      if(v==="ltr"||v==="rtl"||v==="auto")data.attrValue=v;else data.keepAttr=false;
+    }
     // Links: web and email only (links can't be opened in the app; no file: or relative
     // paths that resolve against the app's own folder)
     if(node.nodeName==="A"&&data.attrName==="href"&&!/^(https?|mailto):/i.test(String(data.attrValue).trim()))data.keepAttr=false;
@@ -166,7 +171,7 @@ const sanitizeHTML=(html)=>{
         "ul","ol","li","blockquote","pre","code","table","thead","tbody","tr","td","th",
         "a","img","hr","div","span","label","input","sub","sup","font"],
       ALLOWED_ATTR:["href","src","title","alt","style","class","id","type","checked",
-        "for","color","size","face","target","width","height","colspan","rowspan"],
+        "for","color","size","face","target","width","height","colspan","rowspan","dir"],
       FORBID_TAGS:["script","iframe","object","embed","form","textarea","select","button","meta","link","base"],
       FORBID_ATTR:["onerror","onload","onclick","onmouseover","onfocus","onblur","onchange",
         "onsubmit","onkeydown","onkeyup","onkeypress","onmousedown","onmouseup",
@@ -354,6 +359,7 @@ function ShortcutsDialog({onClose,dark}){
     ["Ctrl+F","Find & Replace"],["Ctrl+L","Lock App"],
     ["Ctrl+Z / Ctrl+Y","Undo / Redo"],["Ctrl+= / Ctrl+-","Zoom In / Out"],
     ["Ctrl+\\","Toggle Sidebar"],["Ctrl+Shift+D","Toggle Theme"],
+    ["Ctrl+Right Shift","Paragraph right to left"],["Ctrl+Left Shift","Paragraph left to right"],
     ["Ctrl+P","Print"],["Ctrl+Shift+E","Export HTML"],["F1","This dialog"],
   ];
   return <div className="nf-modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}>
@@ -409,6 +415,9 @@ function I({n,s=16}){
     hr:<line x1="2" y1="12" x2="22" y2="12"/>,
     indent:<><line x1="21" y1="6" x2="11" y2="6"/><line x1="21" y1="12" x2="11" y2="12"/><line x1="21" y1="18" x2="11" y2="18"/><polyline points="3,8 7,12 3,16"/></>,
     outdent:<><line x1="21" y1="6" x2="11" y2="6"/><line x1="21" y1="12" x2="11" y2="12"/><line x1="21" y1="18" x2="11" y2="18"/><polyline points="7,8 3,12 7,16"/></>,
+    // Writing direction: a pilcrow with an arrow under it
+    ltr:<><path d="M13 3H9a3.5 3.5 0 000 7h1"/><line x1="11" y1="3" x2="11" y2="14"/><line x1="15" y1="3" x2="15" y2="14"/><line x1="3" y1="19" x2="20" y2="19"/><polyline points="17,16 20,19 17,22"/></>,
+    rtl:<><path d="M17 3h-4a3.5 3.5 0 000 7h1"/><line x1="15" y1="3" x2="15" y2="14"/><line x1="19" y1="3" x2="19" y2="14"/><line x1="4" y1="19" x2="21" y2="19"/><polyline points="7,16 4,19 7,22"/></>,
     sidebar:<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></>,
     table:<><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></>,
     wrap:<><path d="M3 6h18"/><path d="M3 12h15a3 3 0 110 6h-4"/><polyline points="13,15 11,18 13,21"/><path d="M3 18h4"/></>,
@@ -466,7 +475,7 @@ function RenameInput({id,initialValue,onRename,onCancel}){
     if(ref.current){ref.current.focus();ref.current.select()}
   },[]);
   const commit=()=>onRename(id,val);
-  return <input ref={ref} className="nf-rename" value={val}
+  return <input ref={ref} className="nf-rename" dir="auto" value={val}
     onChange={e=>setVal(e.target.value)}
     onBlur={commit}
     onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();commit()}if(e.key==="Escape")onCancel()}}
@@ -609,7 +618,7 @@ function NoteForge(){
   const [restoreFlow,setRestoreFlow]=useState(null); // {backupPath,hasHint}
   const [vaultDamaged,setVaultDamaged]=useState(false); // the last unlock found the file damaged
   // Toolbar reflection — tracks current format under cursor
-  const [toolbarFmt,setToolbarFmt]=useState({block:"div",size:"3"});
+  const [toolbarFmt,setToolbarFmt]=useState({block:"div",size:"3",dir:null});
 
   const edRef=useRef(null);
   const saveTimer=useRef(null);
@@ -909,6 +918,32 @@ function NoteForge(){
   const exec=useCallback((cmd,val=null)=>{
     edRef.current?.focus();document.execCommand(cmd,false,val);setTimeout(()=>onInput(),10);
   },[onInput]);
+  // Writing direction of the paragraphs in the selection. Without one, each paragraph takes
+  // its direction from its own first letters (styles.css): Arabic, Hebrew or Farsi right to
+  // left, English left to right. "rtl" / "ltr" sets dir on each paragraph (on the whole
+  // list, for list items, so the bullets move too); with `toggle`, when all of them have it
+  // already, it's removed again (automatic). There's no browser command for this, so it
+  // doesn't go through undo.
+  const setDirection=useCallback((dir,toggle)=>{
+    const ed=edRef.current;if(!ed)return;
+    ed.focus();
+    const sel=window.getSelection();
+    if(!sel.rangeCount||!ed.contains(sel.getRangeAt(0).commonAncestorContainer))return;
+    const targets=()=>{
+      const r=sel.getRangeAt(0);
+      const hit=[...ed.querySelectorAll("p,div,h1,h2,h3,h4,h5,h6,blockquote,pre,li,td,th")].filter(b=>r.intersectsNode(b));
+      const inner=hit.filter(b=>!hit.some(o=>o!==b&&b.contains(o)));
+      return [...new Set(inner.map(b=>b.closest("li")?.closest("ul,ol")||b))].filter(b=>ed.contains(b)&&b!==ed);
+    };
+    let blocks=targets();
+    // (text straight in the editor, in no paragraph yet: make it one)
+    if(!blocks.length){document.execCommand("formatBlock",false,"p");blocks=targets()}
+    if(!blocks.length)return;
+    const off=toggle&&blocks.every(b=>b.getAttribute("dir")===dir);
+    for(const b of blocks){if(off)b.removeAttribute("dir");else b.setAttribute("dir",dir)}
+    setToolbarFmt(p=>({...p,dir:off?null:dir}));
+    onInput();
+  },[onInput]);
   // Chromium's insert(Un)orderedList drops the caret at the start of the item. Put a
   // collapsed caret back at the same text offset. Only the selection is touched: editing
   // the DOM here (e.g. unwrapping the <p><ul> it builds) broke undo and lost the text.
@@ -1075,6 +1110,25 @@ function NoteForge(){
     window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
   },[aPg,encEnabled,lockApp]);
 
+  // Ctrl+Right Shift / Ctrl+Left Shift: the paragraph right to left / left to right, as in
+  // Windows' own text boxes and Word. It happens when that Shift is let go, if no other key
+  // was pressed meanwhile (so Ctrl+Shift+N and the like don't).
+  const dirChord=useRef(null);
+  useEffect(()=>{
+    const down=e=>{
+      if(e.key==="Shift")dirChord.current=e.ctrlKey&&!e.altKey&&!e.metaKey?e.code:null;
+      else if(e.key!=="Control")dirChord.current=null;
+    };
+    const up=e=>{
+      if(e.key!=="Shift")return;
+      const code=dirChord.current;dirChord.current=null;
+      if(code===e.code&&(code==="ShiftRight"||code==="ShiftLeft")&&document.activeElement===edRef.current)
+        setDirection(code==="ShiftRight"?"rtl":"ltr");
+    };
+    window.addEventListener("keydown",down);window.addEventListener("keyup",up);
+    return()=>{window.removeEventListener("keydown",down);window.removeEventListener("keyup",up)};
+  },[setDirection]);
+
   /* ── Electron menu ───────────────────────────────────────── */
   // The listener below only re-subscribes when encEnabled/lockApp change, so it must
   // reach per-render handlers (which close over curPage, aNb, ...) through this ref.
@@ -1135,7 +1189,10 @@ function NoteForge(){
         const el=sel.anchorNode.nodeType===3?sel.anchorNode.parentElement:sel.anchorNode;
         const px=parseFloat(getComputedStyle(el).fontSize)*14/parseFloat(getComputedStyle(edRef.current).fontSize);
         const size=FONT_SIZES.reduce((a,b)=>Math.abs(+b.l-px)<Math.abs(+a.l-px)?b:a).v;
-        setToolbarFmt(p=>(p.block===block&&p.size===size)?p:{block,size});
+        // a direction set on this paragraph or its list (none: automatic)
+        const dEl=el.closest?.("[dir]");
+        const dir=dEl&&dEl!==edRef.current&&edRef.current.contains(dEl)?dEl.getAttribute("dir"):null;
+        setToolbarFmt(p=>(p.block===block&&p.size===size&&p.dir===dir)?p:{block,size,dir});
       }catch{}
     };
     document.addEventListener("selectionchange",sync);
@@ -1737,7 +1794,7 @@ function NoteForge(){
     <div className="nf-logo"><span className="nf-logo-accent">Note</span>Forge</div>
     <div style={{flex:1,maxWidth:360,position:"relative",marginLeft:12}}>
       <div style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"var(--text-muted)",pointerEvents:"none"}}><I n="search" s={13}/></div>
-      <input placeholder="Search all notes…" value={gSearch} onChange={e=>setGSearch(e.target.value)}
+      <input dir="auto" placeholder="Search all notes…" value={gSearch} onChange={e=>setGSearch(e.target.value)}
         onKeyDown={e=>{if(e.key==="Escape"){setGSearch("");e.currentTarget.blur()}}}
         onFocus={()=>setGFocused(true)} onBlur={()=>setTimeout(()=>setGFocused(false),250)}
         style={{width:"100%",height:30,paddingLeft:30,paddingRight:10,border:"1px solid var(--border)",borderRadius:8,background:"var(--bg)",color:"var(--text)",fontSize:12.5,outline:"none"}}/>
@@ -1806,7 +1863,7 @@ function NoteForge(){
           <div className={`nf-nb-chevron${expNb[nb.id]?" open":""}`}><I n="chev" s={11}/></div>
           <div className="nf-nb-color" style={{background:nb.color}}/>
           {editId===nb.id?<RenameInput id={nb.id} initialValue={editVal} onRename={rename} onCancel={()=>setEditId(null)}/>
-            :<span className="nf-nb-name">{nb.name}</span>}
+            :<span className="nf-nb-name" dir="auto">{nb.name}</span>}
           {locked&&<span className="nf-lock-badge"><I n="lock" s={12}/></span>}
           {nb.locked&&!locked&&<span className="nf-lock-badge" style={{opacity:.3}}><I n="unlock" s={12}/></span>}
         </div>
@@ -1818,7 +1875,7 @@ function NoteForge(){
             onContextMenu={e=>{e.preventDefault();setCtx({x:e.clientX,y:e.clientY,id:sec.id})}}>
             <div className="nf-sec-bar" style={{background:sec.color||nb.color}}/>
             {editId===sec.id?<RenameInput id={sec.id} initialValue={editVal} onRename={rename} onCancel={()=>setEditId(null)}/>
-              :<span className="nf-sec-name">{sec.name}</span>}
+              :<span className="nf-sec-name" dir="auto">{sec.name}</span>}
             <span style={{fontSize:10,color:"var(--text-muted)",flexShrink:0}}>{sec.pages.filter(p=>!p.deleted).length}</span>
           </div>)}
           <div className="nf-add-btn" style={{marginLeft:10}} onClick={()=>addSection(nb.id)}>
@@ -1853,11 +1910,11 @@ function NoteForge(){
         :sectionPages.map(pg=><div key={pg.id} className={`nf-pg${aPg===pg.id?" active":""}`}
           onClick={()=>{if(editId===pg.id)return;navigateTo(aNb,aSec,pg.id)}}
           onContextMenu={e=>{e.preventDefault();setCtx({x:e.clientX,y:e.clientY,id:pg.id})}}>
-          <div className="nf-pg-title">
+          <div className="nf-pg-title" dir="auto">
             {pg.pinned&&<span className="nf-pg-pin">📌 </span>}
             {editId===pg.id?<RenameInput id={pg.id} initialValue={editVal} onRename={rename} onCancel={()=>setEditId(null)}/>:pg.title}
           </div>
-          <div className="nf-pg-preview">{snippet(pg.content)}</div>
+          <div className="nf-pg-preview" dir="auto">{snippet(pg.content)}</div>
           <div className="nf-pg-meta">{showDate(pg.modified)}</div>
         </div>)}
     </div>
@@ -1903,7 +1960,9 @@ function NoteForge(){
         <Btn icon="ol" label="Numbered List" onClick={()=>toggleList("insertOrderedList")} s={13}/>
         <Btn icon="check" label="Checklist" onClick={insertCheck} s={13}/>
         <Btn icon="indent" label="Indent" onClick={()=>exec("indent")} s={13}/>
-        <Btn icon="outdent" label="Outdent" onClick={()=>exec("outdent")} s={13}/><div className="tb-sep"/>
+        <Btn icon="outdent" label="Outdent" onClick={()=>exec("outdent")} s={13}/>
+        <Btn icon="ltr" label="Left to Right (Ctrl+Left Shift)" onClick={()=>setDirection("ltr",true)} active={toolbarFmt.dir==="ltr"} s={13}/>
+        <Btn icon="rtl" label="Right to Left (Ctrl+Right Shift)" onClick={()=>setDirection("rtl",true)} active={toolbarFmt.dir==="rtl"} s={13}/><div className="tb-sep"/>
         <Btn icon="table" label="Table" onClick={insertTable} s={13}/>
         <Btn icon="link" label="Link" onClick={insertLink} s={13}/>
         <Btn icon="quote" label="Blockquote" onClick={()=>exec("formatBlock","blockquote")} s={13}/>
@@ -1916,10 +1975,10 @@ function NoteForge(){
         <Btn icon="zout" label="Zoom Out" onClick={()=>setZoom(z=>Math.max(50,z-10))} s={13}/>
       </div>
       {showFR&&<div className="nf-find-bar fade-in">
-        <input ref={findInputRef} className="nf-find-input" style={{width:160}} placeholder="Find…" value={findT} onChange={e=>setFindT(e.target.value)}
+        <input ref={findInputRef} className="nf-find-input" dir="auto" style={{width:160}} placeholder="Find…" value={findT} onChange={e=>setFindT(e.target.value)}
           title="Enter: next match · Shift+Enter: previous · Esc: close"
           onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();doFind(e.shiftKey?-1:1)}if(e.key==="Escape"){e.preventDefault();closeFind()}}}/>
-        <input ref={replInputRef} className="nf-find-input" style={{width:160}} placeholder="Replace…" value={replT} onChange={e=>setReplT(e.target.value)}
+        <input ref={replInputRef} className="nf-find-input" dir="auto" style={{width:160}} placeholder="Replace…" value={replT} onChange={e=>setReplT(e.target.value)}
           onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();doReplace()}if(e.key==="Escape"){e.preventDefault();closeFind()}}}/>
         {findInfo&&<span className="nf-find-info" style={{color:findInfo.count?"var(--text-muted)":"var(--danger)"}}>
           {findInfo.count?`${findInfo.index||"–"} of ${findInfo.count}`:"No matches"}</span>}
@@ -1932,7 +1991,7 @@ function NoteForge(){
       </div>}
       <div className="nf-title-area">
         {breadcrumb&&<div className="nf-breadcrumb"><div className="nf-breadcrumb-dot" style={{background:breadcrumb.color}}/>{breadcrumb.nb} <span style={{opacity:.5}}>›</span> {breadcrumb.sec}</div>}
-        <input className="nf-title-input" value={curPage.title} onChange={e=>updatePage(aPg,()=>({title:e.target.value,modified:Date.now()}))}/>
+        <input className="nf-title-input" dir="auto" value={curPage.title} onChange={e=>updatePage(aPg,()=>({title:e.target.value,modified:Date.now()}))}/>
         <div className="nf-timestamps"><span>Created {showTime(curPage.created)}</span><span>Modified {showTime(curPage.modified)}</span></div>
       </div>
       <div ref={attachEditor} className="nf-editor" contentEditable suppressContentEditableWarning

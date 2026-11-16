@@ -164,9 +164,16 @@ input,select,button{font-family:inherit}
 .nf-editor h3{font-size:1.12em;font-weight:600;margin:.35em 0 .15em}
 .nf-editor h4{font-size:1em;font-weight:600;margin:.3em 0 .15em}
 .nf-editor p{margin:.25em 0;line-height:1.7}
-.nf-editor ul,.nf-editor ol{margin:.3em 0;padding-left:1.6em}
+.nf-editor ul,.nf-editor ol{margin:.3em 0;padding-inline-start:1.6em}
 .nf-editor li{margin:.12em 0}
-.nf-editor blockquote{border-left:3px solid var(--accent);padding:2px 0 2px 16px;margin:10px 0;opacity:.88;font-style:italic}
+.nf-editor blockquote{border-inline-start:3px solid var(--accent);padding-block:2px;padding-inline:16px 0;margin:10px 0;opacity:.88;font-style:italic}
+
+/* Writing direction. A paragraph takes its direction, and its alignment, from its own first
+   letters: Arabic, Hebrew or Farsi right to left, English left to right, in the same note.
+   One given a direction (dir, from the toolbar or Ctrl+Right/Left Shift), or inside a list
+   given one, keeps it; a dir'd list puts its bullets on that side too. Indents and quote
+   bars above are logical (inline-start), so they follow. */
+.nf-editor :is(p,div,li,h1,h2,h3,h4,h5,h6,blockquote,pre,td,th,label):not([dir]):not(.nf-editor [dir] *){unicode-bidi:plaintext;text-align:start}
 .nf-editor pre{background:var(--code-bg);padding:16px;border-radius:10px;font-family:'JetBrains Mono','Cascadia Code',monospace;font-size:13px;overflow-x:auto;margin:10px 0;tab-size:4;white-space:pre;border:1px solid var(--border)}
 .nf-editor code{background:var(--code-bg);padding:2px 7px;border-radius:5px;font-family:'JetBrains Mono','Cascadia Code',monospace;font-size:13px}
 .nf-editor table{border-collapse:collapse;width:100%;margin:10px 0}

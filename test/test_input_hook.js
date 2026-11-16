@@ -30,5 +30,18 @@ for (const [html, label] of kept) {
   t(`${label}: type kept`, /type="checkbox"/i.test(clean), clean);
 }
 
+// Writing direction (2.10): a paragraph's or list's dir survives saving, but only as one of
+// the values HTML defines. Before, the attribute list dropped dir altogether, so a
+// right-to-left paragraph lost its direction on the next load.
+for (const v of ["rtl", "ltr", "auto"]) {
+  const clean = sanitizeHTML(`<p dir="${v}">x</p><ul dir="${v}"><li>y</li></ul>`);
+  t(`dir="${v}" kept on a paragraph and a list`, (clean.match(new RegExp(`dir="${v}"`, "g")) || []).length === 2, clean);
+}
+t('dir="RTL" kept, as rtl', /dir="rtl"/.test(sanitizeHTML('<p dir="RTL">x</p>')), sanitizeHTML('<p dir="RTL">x</p>'));
+for (const bad of ["x", "rtl; color:red", "javascript:x", ""]) {
+  const clean = sanitizeHTML(`<p dir="${bad}">x</p>`);
+  t(`dir="${bad}" removed`, !/dir=/.test(clean), clean);
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

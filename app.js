@@ -254,6 +254,11 @@ function installDOMPurifyHook() {
       }
       if (st.cssText) data.attrValue = st.cssText;else data.keepAttr = false;
     }
+    // Writing direction (a right-to-left paragraph or list): the three values HTML has
+    if (data.attrName === "dir") {
+      const v = String(data.attrValue).trim().toLowerCase();
+      if (v === "ltr" || v === "rtl" || v === "auto") data.attrValue = v;else data.keepAttr = false;
+    }
     // Links: web and email only (links can't be opened in the app; no file: or relative
     // paths that resolve against the app's own folder)
     if (node.nodeName === "A" && data.attrName === "href" && !/^(https?|mailto):/i.test(String(data.attrValue).trim())) data.keepAttr = false;
@@ -272,7 +277,7 @@ const sanitizeHTML = html => {
     installDOMPurifyHook();
     return window.DOMPurify.sanitize(html, {
       ALLOWED_TAGS: ["h1", "h2", "h3", "h4", "p", "br", "strong", "b", "em", "i", "u", "s", "del", "ul", "ol", "li", "blockquote", "pre", "code", "table", "thead", "tbody", "tr", "td", "th", "a", "img", "hr", "div", "span", "label", "input", "sub", "sup", "font"],
-      ALLOWED_ATTR: ["href", "src", "title", "alt", "style", "class", "id", "type", "checked", "for", "color", "size", "face", "target", "width", "height", "colspan", "rowspan"],
+      ALLOWED_ATTR: ["href", "src", "title", "alt", "style", "class", "id", "type", "checked", "for", "color", "size", "face", "target", "width", "height", "colspan", "rowspan", "dir"],
       FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "textarea", "select", "button", "meta", "link", "base"],
       FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "onchange", "onsubmit", "onkeydown", "onkeyup", "onkeypress", "onmousedown", "onmouseup", "onauxclick", "onpointerdown", "onpointerup", "onwheel", "onbeforeinput", "oninput", "onpaste"],
       ALLOW_DATA_ATTR: false
@@ -554,7 +559,7 @@ function ShortcutsDialog({
   useEffect(() => {
     ref.current?.focus();
   }, []);
-  const rows = [["Ctrl+N", "New Page"], ["Ctrl+Shift+N", "New Notebook"], ["Ctrl+B / I / U", "Bold / Italic / Underline"], ["Ctrl+D", "Duplicate Page"], ["Ctrl+F", "Find & Replace"], ["Ctrl+L", "Lock App"], ["Ctrl+Z / Ctrl+Y", "Undo / Redo"], ["Ctrl+= / Ctrl+-", "Zoom In / Out"], ["Ctrl+\\", "Toggle Sidebar"], ["Ctrl+Shift+D", "Toggle Theme"], ["Ctrl+P", "Print"], ["Ctrl+Shift+E", "Export HTML"], ["F1", "This dialog"]];
+  const rows = [["Ctrl+N", "New Page"], ["Ctrl+Shift+N", "New Notebook"], ["Ctrl+B / I / U", "Bold / Italic / Underline"], ["Ctrl+D", "Duplicate Page"], ["Ctrl+F", "Find & Replace"], ["Ctrl+L", "Lock App"], ["Ctrl+Z / Ctrl+Y", "Undo / Redo"], ["Ctrl+= / Ctrl+-", "Zoom In / Out"], ["Ctrl+\\", "Toggle Sidebar"], ["Ctrl+Shift+D", "Toggle Theme"], ["Ctrl+Right Shift", "Paragraph right to left"], ["Ctrl+Left Shift", "Paragraph left to right"], ["Ctrl+P", "Print"], ["Ctrl+Shift+E", "Export HTML"], ["F1", "This dialog"]];
   return /*#__PURE__*/React.createElement("div", {
     className: "nf-modal-overlay",
     onMouseDown: e => {
@@ -902,6 +907,47 @@ function I({
     }), /*#__PURE__*/React.createElement("polyline", {
       points: "7,8 3,12 7,16"
     })),
+    // Writing direction: a pilcrow with an arrow under it
+    ltr: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("path", {
+      d: "M13 3H9a3.5 3.5 0 000 7h1"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "11",
+      y1: "3",
+      x2: "11",
+      y2: "14"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "15",
+      y1: "3",
+      x2: "15",
+      y2: "14"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "3",
+      y1: "19",
+      x2: "20",
+      y2: "19"
+    }), /*#__PURE__*/React.createElement("polyline", {
+      points: "17,16 20,19 17,22"
+    })),
+    rtl: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("path", {
+      d: "M17 3h-4a3.5 3.5 0 000 7h1"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "15",
+      y1: "3",
+      x2: "15",
+      y2: "14"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "19",
+      y1: "3",
+      x2: "19",
+      y2: "14"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "4",
+      y1: "19",
+      x2: "21",
+      y2: "19"
+    }), /*#__PURE__*/React.createElement("polyline", {
+      points: "7,16 4,19 7,22"
+    })),
     sidebar: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("rect", {
       x: "3",
       y: "3",
@@ -1225,6 +1271,7 @@ function RenameInput({
   return /*#__PURE__*/React.createElement("input", {
     ref: ref,
     className: "nf-rename",
+    dir: "auto",
     value: val,
     onChange: e => setVal(e.target.value),
     onBlur: commit,
@@ -1510,7 +1557,8 @@ function NoteForge() {
   // Toolbar reflection — tracks current format under cursor
   const [toolbarFmt, setToolbarFmt] = useState({
     block: "div",
-    size: "3"
+    size: "3",
+    dir: null
   });
   const edRef = useRef(null);
   const saveTimer = useRef(null);
@@ -1951,6 +1999,41 @@ function NoteForge() {
     document.execCommand(cmd, false, val);
     setTimeout(() => onInput(), 10);
   }, [onInput]);
+  // Writing direction of the paragraphs in the selection. Without one, each paragraph takes
+  // its direction from its own first letters (styles.css): Arabic, Hebrew or Farsi right to
+  // left, English left to right. "rtl" / "ltr" sets dir on each paragraph (on the whole
+  // list, for list items, so the bullets move too); with `toggle`, when all of them have it
+  // already, it's removed again (automatic). There's no browser command for this, so it
+  // doesn't go through undo.
+  const setDirection = useCallback((dir, toggle) => {
+    const ed = edRef.current;
+    if (!ed) return;
+    ed.focus();
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !ed.contains(sel.getRangeAt(0).commonAncestorContainer)) return;
+    const targets = () => {
+      const r = sel.getRangeAt(0);
+      const hit = [...ed.querySelectorAll("p,div,h1,h2,h3,h4,h5,h6,blockquote,pre,li,td,th")].filter(b => r.intersectsNode(b));
+      const inner = hit.filter(b => !hit.some(o => o !== b && b.contains(o)));
+      return [...new Set(inner.map(b => b.closest("li")?.closest("ul,ol") || b))].filter(b => ed.contains(b) && b !== ed);
+    };
+    let blocks = targets();
+    // (text straight in the editor, in no paragraph yet: make it one)
+    if (!blocks.length) {
+      document.execCommand("formatBlock", false, "p");
+      blocks = targets();
+    }
+    if (!blocks.length) return;
+    const off = toggle && blocks.every(b => b.getAttribute("dir") === dir);
+    for (const b of blocks) {
+      if (off) b.removeAttribute("dir");else b.setAttribute("dir", dir);
+    }
+    setToolbarFmt(p => ({
+      ...p,
+      dir: off ? null : dir
+    }));
+    onInput();
+  }, [onInput]);
   // Chromium's insert(Un)orderedList drops the caret at the start of the item. Put a
   // collapsed caret back at the same text offset. Only the selection is touched: editing
   // the DOM here (e.g. unwrapping the <p><ul> it builds) broke undo and lost the text.
@@ -2212,6 +2295,28 @@ function NoteForge() {
     return () => window.removeEventListener("keydown", h);
   }, [aPg, encEnabled, lockApp]);
 
+  // Ctrl+Right Shift / Ctrl+Left Shift: the paragraph right to left / left to right, as in
+  // Windows' own text boxes and Word. It happens when that Shift is let go, if no other key
+  // was pressed meanwhile (so Ctrl+Shift+N and the like don't).
+  const dirChord = useRef(null);
+  useEffect(() => {
+    const down = e => {
+      if (e.key === "Shift") dirChord.current = e.ctrlKey && !e.altKey && !e.metaKey ? e.code : null;else if (e.key !== "Control") dirChord.current = null;
+    };
+    const up = e => {
+      if (e.key !== "Shift") return;
+      const code = dirChord.current;
+      dirChord.current = null;
+      if (code === e.code && (code === "ShiftRight" || code === "ShiftLeft") && document.activeElement === edRef.current) setDirection(code === "ShiftRight" ? "rtl" : "ltr");
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, [setDirection]);
+
   /* ── Electron menu ───────────────────────────────────────── */
   // The listener below only re-subscribes when encEnabled/lockApp change, so it must
   // reach per-render handlers (which close over curPage, aNb, ...) through this ref.
@@ -2277,9 +2382,13 @@ function NoteForge() {
         const el = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
         const px = parseFloat(getComputedStyle(el).fontSize) * 14 / parseFloat(getComputedStyle(edRef.current).fontSize);
         const size = FONT_SIZES.reduce((a, b) => Math.abs(+b.l - px) < Math.abs(+a.l - px) ? b : a).v;
-        setToolbarFmt(p => p.block === block && p.size === size ? p : {
+        // a direction set on this paragraph or its list (none: automatic)
+        const dEl = el.closest?.("[dir]");
+        const dir = dEl && dEl !== edRef.current && edRef.current.contains(dEl) ? dEl.getAttribute("dir") : null;
+        setToolbarFmt(p => p.block === block && p.size === size && p.dir === dir ? p : {
           block,
-          size
+          size,
+          dir
         });
       } catch {}
     };
@@ -3537,6 +3646,7 @@ function NoteForge() {
     n: "search",
     s: 13
   })), /*#__PURE__*/React.createElement("input", {
+    dir: "auto",
     placeholder: "Search all notes\u2026",
     value: gSearch,
     onChange: e => setGSearch(e.target.value),
@@ -3704,7 +3814,8 @@ function NoteForge() {
       onRename: rename,
       onCancel: () => setEditId(null)
     }) : /*#__PURE__*/React.createElement("span", {
-      className: "nf-nb-name"
+      className: "nf-nb-name",
+      dir: "auto"
     }, nb.name), locked && /*#__PURE__*/React.createElement("span", {
       className: "nf-lock-badge"
     }, /*#__PURE__*/React.createElement(I, {
@@ -3749,7 +3860,8 @@ function NoteForge() {
       onRename: rename,
       onCancel: () => setEditId(null)
     }) : /*#__PURE__*/React.createElement("span", {
-      className: "nf-sec-name"
+      className: "nf-sec-name",
+      dir: "auto"
     }, sec.name), /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
@@ -3850,7 +3962,8 @@ function NoteForge() {
       });
     }
   }, /*#__PURE__*/React.createElement("div", {
-    className: "nf-pg-title"
+    className: "nf-pg-title",
+    dir: "auto"
   }, pg.pinned && /*#__PURE__*/React.createElement("span", {
     className: "nf-pg-pin"
   }, "\uD83D\uDCCC "), editId === pg.id ? /*#__PURE__*/React.createElement(RenameInput, {
@@ -3859,7 +3972,8 @@ function NoteForge() {
     onRename: rename,
     onCancel: () => setEditId(null)
   }) : pg.title), /*#__PURE__*/React.createElement("div", {
-    className: "nf-pg-preview"
+    className: "nf-pg-preview",
+    dir: "auto"
   }, snippet(pg.content)), /*#__PURE__*/React.createElement("div", {
     className: "nf-pg-meta"
   }, showDate(pg.modified))))), /*#__PURE__*/React.createElement("div", {
@@ -4042,6 +4156,18 @@ function NoteForge() {
     label: "Outdent",
     onClick: () => exec("outdent"),
     s: 13
+  }), /*#__PURE__*/React.createElement(Btn, {
+    icon: "ltr",
+    label: "Left to Right (Ctrl+Left Shift)",
+    onClick: () => setDirection("ltr", true),
+    active: toolbarFmt.dir === "ltr",
+    s: 13
+  }), /*#__PURE__*/React.createElement(Btn, {
+    icon: "rtl",
+    label: "Right to Left (Ctrl+Right Shift)",
+    onClick: () => setDirection("rtl", true),
+    active: toolbarFmt.dir === "rtl",
+    s: 13
   }), /*#__PURE__*/React.createElement("div", {
     className: "tb-sep"
   }), /*#__PURE__*/React.createElement(Btn, {
@@ -4106,6 +4232,7 @@ function NoteForge() {
   }, /*#__PURE__*/React.createElement("input", {
     ref: findInputRef,
     className: "nf-find-input",
+    dir: "auto",
     style: {
       width: 160
     },
@@ -4126,6 +4253,7 @@ function NoteForge() {
   }), /*#__PURE__*/React.createElement("input", {
     ref: replInputRef,
     className: "nf-find-input",
+    dir: "auto",
     style: {
       width: 160
     },
@@ -4203,6 +4331,7 @@ function NoteForge() {
     }
   }, "\u203A"), " ", breadcrumb.sec), /*#__PURE__*/React.createElement("input", {
     className: "nf-title-input",
+    dir: "auto",
     value: curPage.title,
     onChange: e => updatePage(aPg, () => ({
       title: e.target.value,

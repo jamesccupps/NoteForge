@@ -1292,6 +1292,65 @@ SCENARIOS.damagedVaultOffersRestore = {
   },
 };
 
+// Right-to-left writing (issue #2). Each paragraph takes its direction from its own text;
+// the toolbar and Ctrl+Right/Left Shift set one (on the whole list for list items); it's
+// saved, survives a reload, and toggles back to automatic.
+SCENARIOS.rtlWriting = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].title = "صفحة عربية";
+    d.notebooks[0].sections[0].pages[0].content = "<p>English line here</p><p>مرحبا بالعالم هذا نص</p><p>שלום עולם</p><ul><li>first item</li><li>second item</li></ul>";
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelectorAll(".nf-editor p").length===3`);
+    // which side of its box a block's text sits on
+    const side = (sel, i = 0) => c.js(`(()=>{const el=document.querySelectorAll(${JSON.stringify(sel)})[${i}];const r=document.createRange();r.selectNodeContents(el);
+      const t=r.getBoundingClientRect(),b=el.getBoundingClientRect();return (t.left-b.left)<(b.right-t.right)?"left":"right"})()`);
+    c.check("English paragraph sits left", (await side(".nf-editor p", 0)) === "left");
+    c.check("Arabic paragraph sits right, by itself", (await side(".nf-editor p", 1)) === "right");
+    c.check("Hebrew paragraph sits right, by itself", (await side(".nf-editor p", 2)) === "right");
+    c.check("the page title is dir=auto", await c.js(`document.querySelector(".nf-title-input").getAttribute("dir")==="auto"`));
+    const caretIn = (sel, i = 0) => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const r=document.createRange();
+      r.selectNodeContents(document.querySelectorAll(${JSON.stringify(sel)})[${i}]);r.collapse(true);const s=getSelection();s.removeAllRanges();s.addRange(r)})()`);
+    const button = (label) => c.js(`[...document.querySelectorAll(".nf-toolbar button")].find(b=>b.title.startsWith(${JSON.stringify(label)})).click()`);
+    const dirOf = (sel, i = 0) => c.js(`document.querySelectorAll(${JSON.stringify(sel)})[${i}].getAttribute("dir")`);
+
+    await caretIn(".nf-editor p", 0);
+    await button("Right to Left");
+    c.check("Right to Left on the English paragraph: dir=rtl", (await dirOf(".nf-editor p", 0)) === "rtl");
+    c.check("...and it now sits right", (await side(".nf-editor p", 0)) === "right");
+    c.check("...the button shows it", await c.js(`[...document.querySelectorAll(".nf-toolbar button")].find(b=>b.title.startsWith("Right to Left")).classList.contains("active")`));
+    const saved = await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes('dir="rtl"'), 4000).catch(() => null);
+    c.check("...and it's saved", !!saved);
+    await button("Right to Left");
+    c.check("clicked again: back to automatic (no dir)", (await dirOf(".nf-editor p", 0)) === null);
+
+    // Ctrl+Right Shift / Ctrl+Left Shift (the Shift's release, nothing else pressed between)
+    const chord = (code) => c.js(`(()=>{const o={ctrlKey:true,bubbles:true};window.dispatchEvent(new KeyboardEvent("keydown",{...o,key:"Control",code:"ControlLeft"}));
+      window.dispatchEvent(new KeyboardEvent("keydown",{...o,key:"Shift",code:${JSON.stringify(code)},shiftKey:true}));
+      window.dispatchEvent(new KeyboardEvent("keyup",{...o,key:"Shift",code:${JSON.stringify(code)}}))})()`);
+    await caretIn(".nf-editor p", 0);
+    await chord("ShiftRight");
+    c.check("Ctrl+Right Shift: right to left", (await dirOf(".nf-editor p", 0)) === "rtl");
+    await chord("ShiftLeft");
+    c.check("Ctrl+Left Shift: left to right", (await dirOf(".nf-editor p", 0)) === "ltr");
+    await c.js(`(()=>{const o={ctrlKey:true,bubbles:true};window.dispatchEvent(new KeyboardEvent("keydown",{...o,key:"Shift",code:"ShiftRight",shiftKey:true}));
+      window.dispatchEvent(new KeyboardEvent("keydown",{...o,key:"N",code:"KeyN",shiftKey:true}));window.dispatchEvent(new KeyboardEvent("keyup",{...o,key:"Shift",code:"ShiftRight"}))})()`);
+    c.check("Ctrl+Shift+N doesn't change it", (await dirOf(".nf-editor p", 0)) === "ltr");
+
+    await caretIn(".nf-editor li", 1);
+    await button("Right to Left");
+    c.check("in a list item: the whole list goes right to left", (await dirOf(".nf-editor ul")) === "rtl" && (await dirOf(".nf-editor li", 1)) === null);
+    c.check("...bullets and all", await c.js(`getComputedStyle(document.querySelector(".nf-editor ul")).direction==="rtl"`));
+
+    await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes('<ul dir="rtl">'), 4000).catch(() => null);
+    c.win.webContents.reload();
+    await c.waitFor(`document.querySelectorAll(".nf-editor p").length===3`);
+    c.check("after a reload, the directions are still there", (await dirOf(".nf-editor p", 0)) === "ltr" && (await dirOf(".nf-editor ul")) === "rtl");
+  },
+};
+
 // Deleting the open page opened the section's first page in stored order, not the one
 // below it in the list (pinned first, then newest).
 SCENARIOS.deleteOpensNextInList = {
