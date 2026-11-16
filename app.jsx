@@ -1128,6 +1128,7 @@ function NoteForge(){
      ═══════════════════════════════════════════════════════════ */
   const addNotebook=()=>{
     const id=uid();const d=dataRef.current;
+    if(!d)return; // (File → New Notebook on the lock screen: no notes loaded)
     persist({...d,notebooks:[...d.notebooks,{id,name:"New Notebook",color:NB_COLORS[d.notebooks.length%NB_COLORS.length],locked:false,encSections:null,sections:[]}]});
     setANb(id);setASec(null);setAPg(null);setExpNb(p=>({...p,[id]:true}));setEditId(id);setEditVal("New Notebook");
   };

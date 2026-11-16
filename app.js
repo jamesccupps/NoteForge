@@ -2275,6 +2275,7 @@ function NoteForge() {
   const addNotebook = () => {
     const id = uid();
     const d = dataRef.current;
+    if (!d) return; // (File → New Notebook on the lock screen: no notes loaded)
     persist({
       ...d,
       notebooks: [...d.notebooks, {

@@ -1292,6 +1292,24 @@ SCENARIOS.damagedVaultOffersRestore = {
   },
 };
 
+// The menu stays active on the lock screen: File → New Notebook there threw a TypeError
+// (no notes loaded). The harness fails a scenario on any renderer console error.
+SCENARIOS.lockScreenNewNotebook = {
+  seed: seedBase,
+  async run(c) {
+    const MPW = "Master!Passw0rd-e2e";
+    await c.waitFor(`document.querySelector(".nf-editor")`);
+    const r = await c.js(`window.electronAPI.enableEncryption(${JSON.stringify(MPW)},"")`);
+    c.check("enable encryption", r && r.success, JSON.stringify(r));
+    c.win.webContents.reload();
+    await c.waitFor(`document.querySelector(".nf-overlay-input")`);
+    c.menu("new-notebook");
+    c.menu("new-page");
+    await c.sleep(500);
+    c.check("still the lock screen", await c.js(`!!document.querySelector(".nf-overlay-input")&&!document.querySelector(".nf-editor")`));
+  },
+};
+
 // A clipboard with both text and a picture (Excel cells, Word) pastes the text; a
 // picture alone, or with only whitespace for text, still pastes as a picture.
 SCENARIOS.pastePrefersText = {

@@ -10,6 +10,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 - **NoteForge opens on a screen you can see.** A window last placed on a monitor that's no longer connected opened off-screen; now Windows centers it (the size is kept).
 - **A damaged settings file no longer stops NoteForge from starting.** A `noteforge-config.json` or `window-state.json` holding valid JSON that isn't settings (such as `null`) left the app running with no window, and a second launch only tried to focus it. Such a file now falls back to the defaults, and any other start-up failure shows a message and quits.
 - **Pasting from Excel or Word pastes the text, not a picture of it.** Programs that put both text and an image on the clipboard pasted as an image. Text now comes first; a picture is pasted when there's no text.
+- **File → New Notebook on the lock screen** did nothing but log an error. It's now ignored there, as New Page already was.
 
 ### Security
 - **A password change removes the restore's rollback copy.** Restore from Backup keeps the vault as it was before (`noteforge-data.enc.pre-restore.bak`), under the password it had then. Changing the master password deleted the earlier versions but not this copy, so the old password still opened the old notes. It's now removed with them, and when encryption is turned off.
