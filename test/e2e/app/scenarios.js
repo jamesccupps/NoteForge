@@ -1292,6 +1292,33 @@ SCENARIOS.damagedVaultOffersRestore = {
   },
 };
 
+// Deleting the open page opened the section's first page in stored order, not the one
+// below it in the list (pinned first, then newest).
+SCENARIOS.deleteOpensNextInList = {
+  seed: () => {
+    const d = seedBase();
+    const p = (id, title, m) => ({ ...page(id, title, `<p>${title} body</p>`), modified: m });
+    d.notebooks[0].sections[0].pages = [p("pg-1", "Newest", 3), p("pg-2", "Middle", 2), p("pg-3", "Oldest", 1)];
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelectorAll(".nf-pg").length===3`);
+    const open = (t) => c.js(`[...document.querySelectorAll(".nf-pg")].find(e=>e.textContent.includes(${JSON.stringify(t)})).click()`);
+    const del = async (t) => {
+      await c.js(R.rightClick(`[...document.querySelectorAll(".nf-pg")].find(e=>e.textContent.includes(${JSON.stringify(t)}))`, 400, 200));
+      await c.sleep(200);
+      await c.js(`${R.ctxItem("Delete")}.click()`);
+      await c.sleep(300);
+    };
+    await open("Middle");
+    await c.waitFor(`${R.editorText}.includes("Middle body")`);
+    await del("Middle");
+    c.check("deleting the middle page opens the one below it", (await c.js(R.editorText)).includes("Oldest body"), await c.js(R.editorText));
+    await del("Oldest");
+    c.check("deleting the last page opens the one above it", (await c.js(R.editorText)).includes("Newest body"), await c.js(R.editorText));
+  },
+};
+
 // The editor menu's Bold, Italic, Underline and Clear Formatting are greyed out with no
 // selection, but ran anyway when clicked (Bold then toggled the style of what's typed next).
 SCENARIOS.greyedEditorItemsDoNothing = {

@@ -16,6 +16,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 - **Find in text with a Turkish İ** (or another letter whose lower case is longer) highlighted every later match a character off, and could stop with an error. Matches are now found in the text as it is.
 - **A page without dates** (from a hand-edited or restored file) showed "Invalid Date" and sorted unpredictably. Its missing date is now taken from the other one, or shown as "—" and sorted last.
 - **The editor menu's greyed-out Bold, Italic, Underline and Clear Formatting** now do nothing when clicked with no text selected, as Cut and Copy already did.
+- **Deleting the open page opens the one below it in the list** (or above, for the last one), not the section's first page.
 
 ### Security
 - **A password change removes the restore's rollback copy.** Restore from Backup keeps the vault as it was before (`noteforge-data.enc.pre-restore.bak`), under the password it had then. Changing the master password deleted the earlier versions but not this copy, so the old password still opened the old notes. It's now removed with them, and when encryption is turned off.

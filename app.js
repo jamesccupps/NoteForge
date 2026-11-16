@@ -2463,6 +2463,14 @@ function NoteForge() {
   const autoSelectNextPage = excludeId => {
     const d = dataRef.current;
     if (!d || !aSec) return;
+    // The page below it in the list as shown (pinned first, then newest), else the one
+    // above; the section's stored order picked its first page instead
+    const shown = sectionPages.findIndex(p => p.id === excludeId);
+    if (shown !== -1) {
+      const next = sectionPages[shown + 1] || sectionPages[shown - 1];
+      setAPg(next?.id || null);
+      return;
+    }
     for (const nb of d.notebooks) for (const sec of nb.sections || []) if (sec.id === aSec) {
       const pg = sec.pages.find(p => !p.deleted && p.id !== excludeId);
       setAPg(pg?.id || null);
