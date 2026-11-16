@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+## [2.9.3] — 2026-11-16
+
+Fixes from an outside review of 2.9.2. Each bug was reproduced first, and each fix has a test that fails on 2.9.2.
+
 ### Fixed
 - **Lock no longer throws away edits it couldn't save.** If the notes file was held by another program (antivirus, a sync client) when you locked, or when auto-lock did, the edits since the last good save were lost. Lock now tries the save a few more times; if it still can't be written, NoteForge stays unlocked and says so, as Re-lock already did, and keeps trying to save. Auto-lock tries again every 30 seconds until it can lock.
 - **NoteForge opens on a screen you can see.** A window last placed on a monitor that's no longer connected opened off-screen; now Windows centers it (the size is kept).

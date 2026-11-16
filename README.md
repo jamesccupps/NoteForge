@@ -40,6 +40,10 @@
 
 Full history is in [CHANGELOG.md](CHANGELOG.md).
 
+**2.9.3 (review fixes):** Lock no longer loses edits it can't save: it stays unlocked and says so. A password change also removes the restore's rollback copy, which the old password still opened. Pasting from Excel or Word pastes the text, large screenshots are stored smaller, and the window opens on a connected screen; plus fixes to Find, shortcuts with Caps Lock, the lock screen's menu and start-up with a damaged settings file.
+
+**2.9.2 (Electron security fixes):** Electron 44.11.1. Each release also carries `NoteForge-Setup.exe` and `NoteForge-portable.exe`, so the Download link always gets the newest version.
+
 **2.9.1 (signed builds):** the installer, the portable exe and the app are code-signed by James Cupps, and from now on the app installs an update only if it carries that signature. No other changes from 2.9.0.
 
 **2.9.0 (review fixes):**
