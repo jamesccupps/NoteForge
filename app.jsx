@@ -243,8 +243,10 @@ function caretOnEmptyLastLine(block,sel){
 }
 
 /* ── Image downscale helper ────────────────────────────────────
-   Large pasted photos are resized to IMG_DOWNSCALE_TARGET_WIDTH and
-   re-encoded as JPEG. Keeps the encrypted data file lean. */
+   A pasted picture over maxBytes is resized to IMG_DOWNSCALE_TARGET_WIDTH (when wider)
+   and re-encoded as JPEG, except one with transparency, which stays PNG (a JPEG would
+   turn its clear parts black). The smaller of that and the original goes in the note.
+   Keeps the encrypted data file lean. */
 function downscaleImage(file, maxBytes){
   return new Promise((resolve,reject)=>{
     if(file.size>IMG_MAX_INLINE_BYTES){
@@ -265,10 +267,16 @@ function downscaleImage(file, maxBytes){
         canvas.width=w;canvas.height=h;
         const ctx=canvas.getContext("2d");
         ctx.drawImage(img,0,0,w,h);
-        const mime=file.type==="image/png"?"image/png":"image/jpeg";
         try{
+          // (a PNG re-encoded as PNG stayed as large as it was: the quality setting only
+          // applies to JPEG. Only a picture that uses its alpha channel needs PNG.)
+          let mime="image/jpeg";
+          if(file.type!=="image/jpeg"){
+            const px=ctx.getImageData(0,0,w,h).data;
+            for(let i=3;i<px.length;i+=4)if(px[i]<255){mime="image/png";break}
+          }
           const dataUrl=canvas.toDataURL(mime,IMG_DOWNSCALE_QUALITY);
-          resolve(dataUrl);
+          resolve(dataUrl.length<ev.target.result.length?dataUrl:ev.target.result);
         }catch(e){reject(new Error("Could not compress image"))}
       };
       img.src=ev.target.result;

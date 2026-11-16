@@ -1359,6 +1359,42 @@ SCENARIOS.pastePrefersText = {
   },
 };
 
+// A large PNG narrower than 1600 px went into the note at full size: it was re-encoded as
+// PNG, where the quality setting does nothing. An opaque one now becomes a JPEG; one with
+// transparency stays PNG (a JPEG would turn the clear parts black).
+SCENARIOS.largePngShrinks = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    // A photo-like 900x700 PNG (smooth gradients plus noise): well over 512 KB as PNG
+    const make = (alpha) => c.js(`(async()=>{
+      const cv=document.createElement("canvas");cv.width=900;cv.height=700;const x=cv.getContext("2d");
+      const im=x.createImageData(900,700);
+      for(let i=0;i<im.data.length;i+=4){const p=i/4,X=p%900,Y=(p/900)|0;
+        im.data[i]=(X*255/900+Math.random()*40)|0;im.data[i+1]=(Y*255/700+Math.random()*40)|0;im.data[i+2]=(Math.random()*90)|0;
+        im.data[i+3]=${alpha ? "(X<450?255:120)" : "255"};}
+      x.putImageData(im,0,0);
+      const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+      window.__img=new File([blob],"shot.png",{type:"image/png"});return blob.size})()`);
+    const paste = () => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();
+      const s=getSelection();s.selectAllChildren(ed.lastChild);s.collapseToEnd();
+      const dt=new DataTransfer();dt.items.add(window.__img);
+      ed.dispatchEvent(new ClipboardEvent("paste",{clipboardData:dt,bubbles:true,cancelable:true}))})()`);
+    const lastImg = () => c.js(`(()=>{const i=[...document.querySelectorAll(".nf-editor img")].pop();return i?[i.src.slice(0,15),i.src.length]:null})()`);
+    const opaque = await make(false);
+    await paste();
+    await c.waitFor(`document.querySelectorAll(".nf-editor img").length===1`, 6000).catch(() => {});
+    let img = await lastImg();
+    c.check(`an opaque ${Math.round(opaque / 1024)} KB PNG becomes a JPEG`, !!img && img[0] === "data:image/jpeg", JSON.stringify(img));
+    c.check("...a good deal smaller than the PNG", !!img && img[1] * 0.75 < opaque * 0.6, `${img && Math.round(img[1] * 0.75 / 1024)} KB`);
+    await make(true);
+    await paste();
+    await c.waitFor(`document.querySelectorAll(".nf-editor img").length===2`, 6000).catch(() => {});
+    img = await lastImg();
+    c.check("a PNG with transparency stays PNG", !!img && img[0] === "data:image/png;", JSON.stringify(img));
+  },
+};
+
 // An image paste is processed asynchronously. Switching page before it finished
 // inserted the image into the new page and saved that page's content over the old one.
 SCENARIOS.latePasteKeepsPages = {
