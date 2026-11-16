@@ -1292,6 +1292,30 @@ SCENARIOS.damagedVaultOffersRestore = {
   },
 };
 
+// A page without times (a hand-edited or restored file) showed "Invalid Date" and sorted
+// unpredictably: normalizeData didn't fill them in.
+SCENARIOS.pageWithoutTimes = {
+  seed: () => {
+    const d = seedBase();
+    const pages = d.notebooks[0].sections[0].pages;
+    pages[0].modified = 1700000000000;
+    pages.push({ id: "pg-nt", title: "No times", content: "<p>bare</p>" });
+    pages.push({ id: "pg-c", title: "Created only", content: "<p>c</p>", created: 1600000000000 });
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    const text = await c.js(`document.body.innerText`);
+    c.check("no \"Invalid Date\" in the page list", !text.includes("Invalid Date"));
+    const order = await c.js(`[...document.querySelectorAll(".nf-pg")].map(e=>e.textContent)`);
+    c.check("newest first, a page without times last", /alpha|Alpha/.test(order[0]) && order[1].includes("Created only") && order[2].includes("No times"), JSON.stringify(order));
+    await c.js(`[...document.querySelectorAll(".nf-pg")].find(e=>e.textContent.includes("No times")).click()`);
+    await c.sleep(300);
+    c.check("its own Created/Modified line has no \"Invalid Date\"", !(await c.js(`document.querySelector(".nf-timestamps")?.textContent||""`)).includes("Invalid Date"),
+      await c.js(`document.querySelector(".nf-timestamps")?.textContent||""`));
+  },
+};
+
 // Find, ignoring case, in text with a character whose lower case is longer (Turkish İ is
 // two characters lower-cased): offsets from the lower-cased text, applied to the original,
 // put every later match one character off, and a match at a text's end threw.

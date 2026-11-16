@@ -308,17 +308,29 @@ function sanitizeForDiskSync(data) {
 const asArray = x => Array.isArray(x) ? x : [];
 const asString = x => typeof x === "string" ? x : "";
 const isRecord = x => x && typeof x === "object" && !Array.isArray(x);
+// A time as milliseconds, or null: numbers, and date strings a hand-edited file may hold
+const asTime = x => typeof x === "number" && Number.isFinite(x) ? x : typeof x === "string" && Number.isFinite(Date.parse(x)) ? Date.parse(x) : null;
+// A page's times, for display: "—" for one that isn't known (0)
+const showDate = t => t ? new Date(t).toLocaleDateString() : "—";
+const showTime = t => t ? new Date(t).toLocaleString() : "—";
 function normalizeSections(sections) {
   return asArray(sections).filter(isRecord).map(sec => ({
     ...sec,
     id: sec.id || uid(),
     name: asString(sec.name) || "Untitled",
-    pages: asArray(sec.pages).filter(isRecord).map(pg => ({
-      ...pg,
-      id: pg.id || uid(),
-      title: asString(pg.title),
-      content: asString(pg.content)
-    }))
+    pages: asArray(sec.pages).filter(isRecord).map(pg => {
+      // (a page without times showed "Invalid Date" and sorted unpredictably)
+      const created = asTime(pg.created),
+        modified = asTime(pg.modified);
+      return {
+        ...pg,
+        id: pg.id || uid(),
+        title: asString(pg.title),
+        content: asString(pg.content),
+        created: created ?? modified ?? 0,
+        modified: modified ?? created ?? 0
+      };
+    })
   }));
 }
 function normalizeData(d) {
@@ -3842,7 +3854,7 @@ function NoteForge() {
     className: "nf-pg-preview"
   }, snippet(pg.content)), /*#__PURE__*/React.createElement("div", {
     className: "nf-pg-meta"
-  }, new Date(pg.modified).toLocaleDateString())))), /*#__PURE__*/React.createElement("div", {
+  }, showDate(pg.modified))))), /*#__PURE__*/React.createElement("div", {
     className: "nf-pages-footer"
   }, /*#__PURE__*/React.createElement("div", {
     className: "nf-add-btn",
@@ -3910,7 +3922,7 @@ function NoteForge() {
       fontSize: 11,
       color: "var(--text-muted)"
     }
-  }, p.nbName, " \u203A ", p.secName, " \xB7 ", new Date(p.modified).toLocaleDateString())), /*#__PURE__*/React.createElement("button", {
+  }, p.nbName, " \u203A ", p.secName, " \xB7 ", showDate(p.modified))), /*#__PURE__*/React.createElement("button", {
     className: "nf-trash-btn",
     onClick: () => restorePage(p.id),
     style: {
@@ -4190,7 +4202,7 @@ function NoteForge() {
     }))
   }), /*#__PURE__*/React.createElement("div", {
     className: "nf-timestamps"
-  }, /*#__PURE__*/React.createElement("span", null, "Created ", new Date(curPage.created).toLocaleString()), /*#__PURE__*/React.createElement("span", null, "Modified ", new Date(curPage.modified).toLocaleString()))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, "Created ", showTime(curPage.created)), /*#__PURE__*/React.createElement("span", null, "Modified ", showTime(curPage.modified)))), /*#__PURE__*/React.createElement("div", {
     ref: attachEditor,
     className: "nf-editor",
     contentEditable: true,

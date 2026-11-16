@@ -204,9 +204,19 @@ function sanitizeForDiskSync(data){
 const asArray=(x)=>Array.isArray(x)?x:[];
 const asString=(x)=>typeof x==="string"?x:"";
 const isRecord=(x)=>x&&typeof x==="object"&&!Array.isArray(x);
+// A time as milliseconds, or null: numbers, and date strings a hand-edited file may hold
+const asTime=(x)=>typeof x==="number"&&Number.isFinite(x)?x:typeof x==="string"&&Number.isFinite(Date.parse(x))?Date.parse(x):null;
+// A page's times, for display: "—" for one that isn't known (0)
+const showDate=(t)=>t?new Date(t).toLocaleDateString():"—";
+const showTime=(t)=>t?new Date(t).toLocaleString():"—";
 function normalizeSections(sections){
   return asArray(sections).filter(isRecord).map(sec=>({...sec,id:sec.id||uid(),name:asString(sec.name)||"Untitled",
-    pages:asArray(sec.pages).filter(isRecord).map(pg=>({...pg,id:pg.id||uid(),title:asString(pg.title),content:asString(pg.content)}))}));
+    pages:asArray(sec.pages).filter(isRecord).map(pg=>{
+      // (a page without times showed "Invalid Date" and sorted unpredictably)
+      const created=asTime(pg.created),modified=asTime(pg.modified);
+      return{...pg,id:pg.id||uid(),title:asString(pg.title),content:asString(pg.content),
+        created:created??modified??0,modified:modified??created??0};
+    })}));
 }
 function normalizeData(d){
   return{...(isRecord(d)?d:{}),notebooks:asArray(d?.notebooks).filter(isRecord).map(nb=>({...nb,id:nb.id||uid(),name:asString(nb.name)||"Untitled",sections:normalizeSections(nb.sections)}))};
@@ -1844,7 +1854,7 @@ function NoteForge(){
             {editId===pg.id?<RenameInput id={pg.id} initialValue={editVal} onRename={rename} onCancel={()=>setEditId(null)}/>:pg.title}
           </div>
           <div className="nf-pg-preview">{snippet(pg.content)}</div>
-          <div className="nf-pg-meta">{new Date(pg.modified).toLocaleDateString()}</div>
+          <div className="nf-pg-meta">{showDate(pg.modified)}</div>
         </div>)}
     </div>
     <div className="nf-pages-footer">
@@ -1866,7 +1876,7 @@ function NoteForge(){
         :trashPages.map(p=><div key={p.id} className="nf-trash-item">
           <div style={{flex:1}}>
             <div style={{fontSize:14,fontWeight:600}}>{p.title}</div>
-            <div style={{fontSize:11,color:"var(--text-muted)"}}>{p.nbName} › {p.secName} · {new Date(p.modified).toLocaleDateString()}</div>
+            <div style={{fontSize:11,color:"var(--text-muted)"}}>{p.nbName} › {p.secName} · {showDate(p.modified)}</div>
           </div>
           <button className="nf-trash-btn" onClick={()=>restorePage(p.id)} style={{marginRight:8,border:"1px solid var(--border)",background:"var(--accent-bg)",color:"var(--accent)",fontWeight:600}}>Restore</button>
           <button className="nf-trash-btn" onClick={()=>permDelete(p.id)} style={{border:"1px solid var(--danger)",background:"transparent",color:"var(--danger)"}}>Delete Forever</button>
@@ -1919,7 +1929,7 @@ function NoteForge(){
       <div className="nf-title-area">
         {breadcrumb&&<div className="nf-breadcrumb"><div className="nf-breadcrumb-dot" style={{background:breadcrumb.color}}/>{breadcrumb.nb} <span style={{opacity:.5}}>›</span> {breadcrumb.sec}</div>}
         <input className="nf-title-input" value={curPage.title} onChange={e=>updatePage(aPg,()=>({title:e.target.value,modified:Date.now()}))}/>
-        <div className="nf-timestamps"><span>Created {new Date(curPage.created).toLocaleString()}</span><span>Modified {new Date(curPage.modified).toLocaleString()}</span></div>
+        <div className="nf-timestamps"><span>Created {showTime(curPage.created)}</span><span>Modified {showTime(curPage.modified)}</span></div>
       </div>
       <div ref={attachEditor} className="nf-editor" contentEditable suppressContentEditableWarning
         onInput={onInput} onPaste={onPaste} onKeyDown={onKeyDown} onDrop={onDrop}
