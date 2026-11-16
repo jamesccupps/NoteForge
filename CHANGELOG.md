@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+## [2.10.0] — 2026-11-16
+
+Right-to-left writing, asked for in [#2](https://github.com/jamesccupps/NoteForge/issues/2).
+
 ### Added
 - **Right-to-left writing** ([#2](https://github.com/jamesccupps/NoteForge/issues/2)). Arabic, Farsi, Hebrew and other right-to-left text now lines up on the right and reads in the right order, paragraph by paragraph, so a note can mix it with English. Two new toolbar buttons, Right to Left and Left to Right, fix the direction of the paragraphs (or the list) the cursor is in, which also moves bullets, indents and quote bars to that side; pressing the lit button again goes back to automatic. Ctrl+Right Shift and Ctrl+Left Shift do the same, as in Word and Notepad. Page titles, notebook, section and page names, page previews and the search and find boxes show their text in its own direction. HTML exports keep it. The menus and dialogs are still English only.
 

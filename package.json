@@ -1,6 +1,6 @@
 {
   "name": "noteforge",
-  "version": "2.9.3",
+  "version": "2.10.0",
   "description": "Encrypted offline note-taking — a OneNote alternative that keeps your data local and protected.",
   "main": "main.js",
   "author": {
