@@ -2157,16 +2157,19 @@ function NoteForge() {
   /* ── Shortcuts ───────────────────────────────────────────── */
   useEffect(() => {
     const h = e => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && (e.key === "f" || e.key === "h")) {
+      // (Caps Lock makes e.key upper case, so compare in lower case; with Shift these are
+      // other shortcuts, Ctrl+Shift+D being the menu's Toggle Theme)
+      const mod = (e.ctrlKey || e.metaKey) && !e.shiftKey;
+      const k = e.key.length === 1 ? e.key.toLowerCase() : "";
+      if (mod && (k === "f" || k === "h")) {
         e.preventDefault();
         menuActions.current.openFind();
       }
-      if (mod && e.key === "d" && !e.shiftKey) {
+      if (mod && k === "d") {
         e.preventDefault();
         if (aPg) duplicatePage(aPg);
       }
-      if (mod && e.key === "l") {
+      if (mod && k === "l") {
         e.preventDefault();
         if (encEnabled) lockApp();
       }

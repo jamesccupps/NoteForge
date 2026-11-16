@@ -1292,6 +1292,27 @@ SCENARIOS.damagedVaultOffersRestore = {
   },
 };
 
+// With Caps Lock on, Ctrl+D and Ctrl+H arrive as "D" and "H": the shortcuts compared
+// lowercase letters only and did nothing. Ctrl+Shift+D stays the menu's Toggle Theme.
+SCENARIOS.capsLockShortcuts = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    const key = (k, shift = false) => c.js(`window.dispatchEvent(new KeyboardEvent("keydown",{key:${JSON.stringify(k)},ctrlKey:true,shiftKey:${shift},bubbles:true,cancelable:true}))`);
+    const pages = () => c.js(`document.querySelectorAll(".nf-pg").length`);
+    const before = await pages();
+    await key("D");
+    await c.sleep(400);
+    c.check("Ctrl+D with Caps Lock duplicates the page", (await pages()) === before + 1, `${before} -> ${await pages()}`);
+    await key("D", true);
+    await c.sleep(300);
+    c.check("Ctrl+Shift+D doesn't duplicate (it's Toggle Theme)", (await pages()) === before + 1, String(await pages()));
+    await key("H");
+    await c.sleep(300);
+    c.check("Ctrl+H with Caps Lock opens Find", await c.js(`!!document.querySelector(".nf-find-bar")`));
+  },
+};
+
 // The menu stays active on the lock screen: File → New Notebook there threw a TypeError
 // (no notes loaded). The harness fails a scenario on any renderer console error.
 SCENARIOS.lockScreenNewNotebook = {
