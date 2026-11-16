@@ -268,7 +268,7 @@ To update the bundled DOMPurify: bump the exact `dompurify` version in `package.
 | Portable build | `NoteForge Data` next to the portable exe |
 | Scoop | `~\scoop\persist\noteforge\NoteForge Data` |
 
-Files: `noteforge-data.json` (unencrypted) or `noteforge-data.enc` (encrypted), `window-state.json`, `ratelimit.json`, `noteforge-hint.txt`, `noteforge-config.json`, `noteforge-data.enc.pre-restore.bak` / `noteforge-data.json.pre-restore.bak` (after a restore, for rollback), `noteforge-data.prev-1.enc` to `prev-3.enc` (the encrypted vault at each of the last 3 unlocks; removed when the master password changes or encryption is turned off). A `*.tmp` file exists only for the moment a save is being written.
+Files: `noteforge-data.json` (unencrypted) or `noteforge-data.enc` (encrypted), `window-state.json`, `ratelimit.json`, `noteforge-hint.txt`, `noteforge-config.json`, `noteforge-data.enc.pre-restore.bak` / `noteforge-data.json.pre-restore.bak` (after a restore, for rollback), `noteforge-data.prev-1.enc` to `prev-3.enc` (the encrypted vault at each of the last 3 unlocks). The earlier versions and the encrypted rollback copy open with the password they were made under, so they're removed when the master password changes or encryption is turned off. A `*.tmp` file exists only for the moment a save is being written.
 
 ## Keyboard Shortcuts
 

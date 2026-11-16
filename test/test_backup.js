@@ -139,5 +139,33 @@ const vaultValue = async (h, pw) => (await h.restart().invoke("unlock-master", p
     h.cleanup();
   }
 
+  section("A password change removes the restore's rollback copy");
+  {
+    // The rollback copy is the vault before the restore, under the password it had then. A
+    // password change deletes the earlier versions for that reason; it must delete this too,
+    // or the old (perhaps compromised) password still opens a full copy of the old notes.
+    const NEW_PW = "Fresh-Passw0rd-after-restore";
+    const { h, backupPath } = await setup();
+    await pick(h, backupPath);
+    const ok = await h.invoke("verify-and-restore-backup", backupPath, BACKUP_PW);
+    const bak = h.file("noteforge-data.enc.pre-restore.bak");
+    t("restore keeps a rollback copy under the old password", ok.success === true && fs.existsSync(bak));
+    const r = await h.restart().invoke("change-master-password", BACKUP_PW, NEW_PW);
+    t("password changed", r.success === true, JSON.stringify(r));
+    t("...and the rollback copy is gone", !fs.existsSync(bak));
+    t("the vault opens with the new password", (await vaultValue(h, NEW_PW)) === BACKUP);
+    h.cleanup();
+  }
+  {
+    const { h, backupPath } = await setup();
+    await pick(h, backupPath);
+    await h.invoke("verify-and-restore-backup", backupPath, BACKUP_PW);
+    const bak = h.file("noteforge-data.enc.pre-restore.bak");
+    const r = await h.restart().invoke("disable-encryption", BACKUP_PW);
+    t("encryption turned off", r.success === true, JSON.stringify(r));
+    t("...and the encrypted rollback copy is gone too", !fs.existsSync(bak));
+    h.cleanup();
+  }
+
   done();
 })().catch((e) => { console.error(e); process.exit(1); });

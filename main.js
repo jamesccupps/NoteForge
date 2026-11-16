@@ -192,7 +192,9 @@ function writeFileAtomic(file, data) {
    A copy of the file as it was at unlock, made before that session's first save:
    the last PREV_KEEP sessions' starting points survive a bad save or a damaged
    file. Named .enc so File → Restore from Backup opens them. They open with the
-   password in use when they were made, so a password change deletes them. */
+   password in use when they were made, so a password change deletes them, and with
+   them a restore's rollback copy (noteforge-data.enc.pre-restore.bak), which opens
+   with the password the vault had before the restore. */
 const PREV_KEEP = 3;
 const prevFile = (n) => path.join(userDataPath, `noteforge-data.prev-${n}.enc`);
 let snapshotDue = false; // set on unlock
@@ -206,6 +208,7 @@ function snapshotVault() {
 }
 function deleteSnapshots() {
   for (let n = 1; n <= PREV_KEEP + 1; n++) { try { fs.unlinkSync(prevFile(n)); } catch {} }
+  try { fs.unlinkSync(encFile + ".pre-restore.bak"); } catch {}
 }
 
 /* ═══════════════════════════════════════════════════════════════
