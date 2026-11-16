@@ -1351,6 +1351,35 @@ SCENARIOS.rtlWriting = {
   },
 };
 
+// The status bar counted words by spaces, so a paragraph of Chinese, Japanese or Thai (no
+// spaces between words) was one word. Text with spaces must count as it did before.
+SCENARIOS.wordCountScripts = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`!!document.querySelector(".nf-editor")`);
+    const words = async (html) => {
+      await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML=${JSON.stringify(html)};ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+      // the count updates on a timer, which an unfocused test window can slow to once a second
+      await new Promise((r) => setTimeout(r, 1500));
+      return Number((await c.js(`document.querySelector(".nf-status span").textContent`)).split(" ")[0]);
+    };
+    let n = await words("<p>Order the 24-port switch, don't wait.</p>");
+    c.check("English counts as before (6)", n === 6, n);
+    n = await words("<p>안녕하세요 세계</p>");
+    c.check("Korean (spaced) counts by spaces (2)", n === 2, n);
+    n = await words("<p>我们今天去买东西</p>");
+    c.check("Chinese: 我们 / 今天 / 去 / 买东西 is 4 words", n === 4, n);
+    n = await words("<p>私は東京に住んでいます</p>");
+    c.check("Japanese: several words", n >= 4, n);
+    n = await words("<p>ภาษาไทยไม่มีช่องว่าง</p>");
+    c.check("Thai: several words", n >= 3, n);
+    n = await words("<p>NoteForge是笔记软件</p>");
+    c.check("Latin and Chinese run together: both counted", n >= 3, n);
+    n = await words("<p>我们，你们。</p>");
+    c.check("Chinese punctuation isn't a word (2)", n === 2, n);
+  },
+};
+
 // Deleting the open page opened the section's first page in stored order, not the one
 // below it in the list (pinned first, then newest).
 SCENARIOS.deleteOpensNextInList = {

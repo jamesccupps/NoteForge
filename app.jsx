@@ -102,6 +102,22 @@ const prefsStore={
    UTILITIES
    ═══════════════════════════════════════════════════════════════ */
 const snippet=(html)=>html?decodeEntities(html.replace(/<[^>]*>/g," ")).replace(/\s+/g," ").trim().slice(0,80):"";
+// Words for the status bar. Chinese, Japanese, Thai, Lao, Khmer and Burmese don't put spaces
+// between words, so counting by spaces made a whole paragraph one word. Runs in those scripts
+// go through the browser's word breaker (ICU has dictionaries for exactly these); text with
+// spaces still counts by spaces, as before.
+const NO_SPACE_SCRIPT=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+let wordSeg=null;
+const countWords=(t)=>{
+  let n=0;
+  for(const tok of t.split(/\s+/)){
+    if(!tok)continue;
+    if(!NO_SPACE_SCRIPT.test(tok)){n++;continue}
+    wordSeg??=new Intl.Segmenter(undefined,{granularity:"word"});
+    for(const s of wordSeg.segment(tok))if(s.isWordLike)n++;
+  }
+  return n;
+};
 const escHtml=(s)=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const hasElectronCrypto=()=>!!(window.electronAPI?.checkEncryption);
 // Decode HTML entities using the browser's built-in parser — safe because we read textContent only
@@ -881,7 +897,7 @@ function NoteForge(){
     if(statsTimer.current)clearTimeout(statsTimer.current);
     statsTimer.current=setTimeout(()=>{
       if(!edRef.current)return;const t=edRef.current.innerText||"";
-      setStats({w:t.trim()?t.trim().split(/\s+/).length:0,c:t.length,l:t.split("\n").length});
+      setStats({w:countWords(t),c:t.length,l:t.split("\n").length});
     },120);
   },[]);
   // Callback ref for the editor element. The effect above only fires when the page

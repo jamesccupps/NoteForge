@@ -41,7 +41,7 @@
 
 Full history is in [CHANGELOG.md](CHANGELOG.md).
 
-**2.10.0 (right-to-left writing):** Arabic, Farsi, Hebrew and other right-to-left text lines up on the right, paragraph by paragraph, beside English. New Right to Left / Left to Right toolbar buttons and Ctrl+Right Shift / Ctrl+Left Shift fix a paragraph's or list's direction. Zoom moved from the toolbar to the View menu and Ctrl+= / Ctrl+- / Ctrl+0.
+**2.10.0 (right-to-left writing):** Arabic, Farsi, Hebrew and other right-to-left text lines up on the right, paragraph by paragraph, beside English. New Right to Left / Left to Right toolbar buttons and Ctrl+Right Shift / Ctrl+Left Shift fix a paragraph's or list's direction. The word count works in Chinese, Japanese, Thai and other languages written without spaces. Zoom moved from the toolbar to the View menu and Ctrl+= / Ctrl+- / Ctrl+0.
 
 **2.9.3 (review fixes):** Lock no longer loses edits it can't save: it stays unlocked and says so. A password change also removes the restore's rollback copy, which the old password still opened. Pasting from Excel or Word pastes the text, large screenshots are stored smaller, and the window opens on a connected screen; plus fixes to Find, shortcuts with Caps Lock, the lock screen's menu and start-up with a damaged settings file.
 

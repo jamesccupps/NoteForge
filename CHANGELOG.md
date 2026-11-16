@@ -7,16 +7,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [2.10.0] — 2026-11-16
 
-Right-to-left writing, asked for in [#2](https://github.com/jamesccupps/NoteForge/issues/2).
+Right-to-left writing, asked for in [#2](https://github.com/jamesccupps/NoteForge/issues/2), and word counts for languages written without spaces.
 
 ### Added
-- **Right-to-left writing** ([#2](https://github.com/jamesccupps/NoteForge/issues/2)). Arabic, Farsi, Hebrew and other right-to-left text now lines up on the right and reads in the right order, paragraph by paragraph, so a note can mix it with English. Two new toolbar buttons, Right to Left and Left to Right, fix the direction of the paragraphs (or the list) the cursor is in, which also moves bullets, indents and quote bars to that side; pressing the lit button again goes back to automatic. Ctrl+Right Shift and Ctrl+Left Shift do the same, as in Word and Notepad. Page titles, notebook, section and page names, page previews and the search and find boxes show their text in its own direction. HTML exports keep it. The menus and dialogs are still English only.
+- **Right-to-left writing** ([#2](https://github.com/jamesccupps/NoteForge/issues/2)). Arabic, Farsi, Hebrew and other right-to-left text now lines up on the right and reads in the right order, paragraph by paragraph, so a note can mix it with English. A paragraph takes its direction from its first letter, so a Farsi line that starts with an English word lines up left; for that, two new toolbar buttons, Right to Left and Left to Right, fix the direction of the paragraphs (or the list) the cursor is in, which also moves bullets, indents and quote bars to that side; pressing the lit button again goes back to automatic. Ctrl+Right Shift and Ctrl+Left Shift do the same, as in Word and Notepad. Page titles, notebook, section and page names, page previews and the search and find boxes show their text in its own direction. HTML exports keep it. The menus and dialogs are still English only.
 
 ### Changed
 - **Zoom left the toolbar** to make room for the direction buttons. It's in the View menu as before, Ctrl+= / Ctrl+- / Ctrl+0 still work, and the status bar shows the level.
 
 ### Fixed
 - **A paragraph's direction is kept when saving.** Before, the sanitizer dropped the `dir` attribute, so a right-to-left paragraph pasted from another program lost its direction on the next load. It now keeps `dir` when it's `ltr`, `rtl` or `auto`, and removes any other value.
+- **Word count in Chinese, Japanese, Thai, Lao, Khmer and Burmese.** These are written without spaces between words, and the status bar counted words by spaces, so a whole paragraph was one word. Text in these scripts is now split into words by Chromium's built-in word breaker (我们今天去买东西 is 4 words: 我们 / 今天 / 去 / 买东西). Text with spaces counts as before.
 
 ## [2.9.3] — 2026-11-16
 
