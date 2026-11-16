@@ -1292,6 +1292,34 @@ SCENARIOS.damagedVaultOffersRestore = {
   },
 };
 
+// A clipboard with both text and a picture (Excel cells, Word) pastes the text; a
+// picture alone, or with only whitespace for text, still pastes as a picture.
+SCENARIOS.pastePrefersText = {
+  seed: seedBase,
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("alpha body")`);
+    await c.js(`(async()=>{
+      const cv=document.createElement("canvas");cv.width=cv.height=40;const x=cv.getContext("2d");x.fillStyle="#3b82f6";x.fillRect(0,0,40,40);
+      const blob=await new Promise(r=>cv.toBlob(r,"image/png"));
+      window.__img=new File([blob],"cells.png",{type:"image/png"});return true})()`);
+    const paste = (text) => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();
+      const s=getSelection();s.selectAllChildren(ed.lastChild);s.collapseToEnd();
+      const dt=new DataTransfer();if(${JSON.stringify(text)}!==null)dt.setData("text/plain",${JSON.stringify(text)});dt.items.add(window.__img);
+      ed.dispatchEvent(new ClipboardEvent("paste",{clipboardData:dt,bubbles:true,cancelable:true}))})()`);
+    const imgs = () => c.js(`document.querySelectorAll(".nf-editor img").length`);
+    await paste("cell-one\tcell-two");
+    await c.sleep(1200);
+    c.check("text and a picture: the text is pasted", (await c.js(R.editorText)).includes("cell-one"), await c.js(R.editorText));
+    c.check("...and not the picture", (await imgs()) === 0, String(await imgs()));
+    await paste(null);
+    await c.waitFor(`document.querySelectorAll(".nf-editor img").length===1`, 4000).catch(() => {});
+    c.check("a picture alone still pastes as a picture", (await imgs()) === 1, String(await imgs()));
+    await paste("  \n");
+    await c.waitFor(`document.querySelectorAll(".nf-editor img").length===2`, 4000).catch(() => {});
+    c.check("a picture with only whitespace for text pastes the picture", (await imgs()) === 2, String(await imgs()));
+  },
+};
+
 // An image paste is processed asynchronously. Switching page before it finished
 // inserted the image into the new page and saved that page's content over the old one.
 SCENARIOS.latePasteKeepsPages = {

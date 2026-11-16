@@ -1983,7 +1983,14 @@ function NoteForge() {
   /* ── Paste ───────────────────────────────────────────────── */
   // Paste and drop both come through here (dt: the clipboard or the drag's data)
   const insertTransfer = useCallback(dt => {
-    // Check for images first
+    // Text first: programs that put both text and a picture of it on the clipboard (Excel
+    // cells, Word) paste as text, as they do elsewhere. A picture only when there's no text.
+    // Plain text strips all formatting: a clean paste, like OneNote.
+    const text = dt.getData("text/plain");
+    if (text.trim()) {
+      document.execCommand("insertText", false, text);
+      return;
+    }
     for (const item of dt.items) {
       if (item.type.startsWith("image/")) {
         const file = item.getAsFile();
@@ -2010,12 +2017,10 @@ function NoteForge() {
         return;
       }
     }
-    // Prefer plain text (strips all formatting — clean paste like OneNote)
-    const text = dt.getData("text/plain");
     if (text) {
       document.execCommand("insertText", false, text);
       return;
-    }
+    } // (whitespace only)
     // Fallback: if only HTML is available (rare), sanitize it
     const html = dt.getData("text/html");
     if (html) {
