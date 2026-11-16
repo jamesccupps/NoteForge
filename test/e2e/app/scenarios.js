@@ -1436,9 +1436,23 @@ SCENARIOS.lockKeepsUnsavedEdits = {
     await c.waitFor(`document.body.innerText.includes("Saved")&&!document.body.innerText.includes("Save failed")`, 8000).catch(() => {});
     c.check("the retry writes it once the file is free", await c.js(`!document.body.innerText.includes("Save failed")`));
     await c.js(`${R.button(".nf-modal button, .nf-dialog button", "OK")}?.click()`).catch(() => {});
+    // Ctrl+L, a real key press: the page's shortcut and the menu's accelerator may both
+    // start a lock; the second must not lock while the first is still trying to save
+    fs.renameSync = () => { const e = new Error("EPERM: operation not permitted, rename"); e.code = "EPERM"; throw e; };
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.innerHTML="<p>held-edit-two</p>";ed.dispatchEvent(new Event("input",{bubbles:true}))})()`);
+    await c.waitFor(`document.body.innerText.includes("Save failed")`, 5000).catch(() => {});
+    c.win.webContents.focus();
+    c.win.webContents.sendInputEvent({ type: "keyDown", keyCode: "L", modifiers: ["control"] });
+    c.win.webContents.sendInputEvent({ type: "keyUp", keyCode: "L", modifiers: ["control"] });
+    await c.waitFor(`document.body.innerText.includes("Couldn't lock")`, 8000).catch(() => {});
+    await c.sleep(500);
+    c.check("Ctrl+L with a held file stays unlocked too", await c.js(`!document.querySelector(".nf-overlay-input")&&document.querySelector(".nf-editor").textContent.includes("held-edit-two")`));
+    fs.renameSync = realRename;
+    await c.waitFor(`!document.body.innerText.includes("Save failed")`, 8000).catch(() => {});
+    await c.js(`${R.button(".nf-modal button, .nf-dialog button", "OK")}?.click()`).catch(() => {});
     c.menu("lock-app");
     await unlockMaster();
-    c.check("after Lock and unlock the edit is there", (await c.js(R.editorText)).includes("held-edit"), await c.js(R.editorText));
+    c.check("after Lock and unlock the edit is there", (await c.js(R.editorText)).includes("held-edit-two"), await c.js(R.editorText));
   },
 };
 
