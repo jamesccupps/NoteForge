@@ -56,9 +56,10 @@ function loadMain({ userData } = {}) {
   };
   const origError = console.error;
   console.error = () => {}; // main.js logs the stubbed-out updater
+  let main;
   try {
     delete require.cache[require.resolve(mainPath)];
-    require(mainPath);
+    main = require(mainPath);
   } finally {
     Module._load = origLoad;
     console.error = origError;
@@ -67,6 +68,7 @@ function loadMain({ userData } = {}) {
   const sender = { paste() { sender.pasted = (sender.pasted || 0) + 1; } };
   const event = () => ({ sender, senderFrame: { url: "file:///index.html" } });
   return {
+    main, // main.js's exports (functions the tests reach without a window)
     userData,
     dialogs,
     sender,

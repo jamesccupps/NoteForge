@@ -199,5 +199,33 @@ const LEAK = JSON.stringify({ notebooks: [{ id: "x", name: "LEAKED-PLAINTEXT", s
     h.cleanup();
   }
 
+  section("Settings files of the wrong shape fall back to the defaults");
+  {
+    // Valid JSON that isn't an object (null, a list, a string) used to be returned as is:
+    // `cfg.sandbox` / `ws.width` then threw in createWindow, and the app ran with no window
+    for (const bad of ["null", "[]", "\"x\"", "42"]) {
+      const h = loadMain();
+      h.write("noteforge-config.json", bad);
+      const cfg = await h.invoke("get-config");
+      t(`noteforge-config.json = ${bad}: the defaults`, cfg && typeof cfg === "object" && !Array.isArray(cfg) && cfg.autoUpdate === true, JSON.stringify(cfg));
+      t(`...and a setting can still be saved`, (await h.invoke("set-config", "autoUpdate", false)).error === undefined && (await h.invoke("get-config")).autoUpdate === false);
+      h.cleanup();
+    }
+    const h = loadMain();
+    const ws = h.main.windowStateFrom;
+    const screen = [{ x: 0, y: 0, width: 1920, height: 1040 }];
+    const dual = [...screen, { x: 1920, y: 0, width: 2560, height: 1400 }];
+    const def = { width: 1400, height: 900, x: undefined, y: undefined, maximized: false };
+    for (const bad of [null, [], "x", 42, { width: "wide", height: null }]) {
+      t(`window state ${JSON.stringify(bad)}: the defaults`, JSON.stringify(ws(bad, screen)) === JSON.stringify(def), JSON.stringify(ws(bad, screen)));
+    }
+    const saved = { x: 2200, y: 100, width: 1200, height: 800, maximized: false };
+    t("a place on the second monitor is kept while it's connected", ws(saved, dual).x === 2200 && ws(saved, dual).y === 100);
+    t("...and dropped once it isn't (the size is kept)", ws(saved, screen).x === undefined && ws(saved, screen).y === undefined && ws(saved, screen).width === 1200);
+    t("a window whose title bar is above the screen is moved", ws({ x: 100, y: -600, width: 1200, height: 800 }, screen).y === undefined);
+    t("a usual place is kept", JSON.stringify(ws({ x: 100, y: 60, width: 1200, height: 800, maximized: true }, screen)) === JSON.stringify({ width: 1200, height: 800, x: 100, y: 60, maximized: true }));
+    h.cleanup();
+  }
+
   done();
 })().catch((e) => { console.error(e); process.exit(1); });

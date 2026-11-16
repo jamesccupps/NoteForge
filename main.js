@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, dialog, ipcMain, session } = require("electron");
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain, session, screen } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
@@ -359,9 +359,28 @@ function recordNbSuccess(nbKey) {
 /* ═══════════════════════════════════════════════════════════════
    WINDOW STATE
    ═══════════════════════════════════════════════════════════════ */
+// The saved size and place, as far as they're usable. A file of the wrong shape (valid JSON
+// that isn't an object: ws.width threw in createWindow, and the app ran with no window) falls
+// back to the defaults, and a place on a monitor that's gone (the window opened off-screen) is
+// dropped: Windows then centers it. `workAreas` are the connected displays' work areas.
+const WINDOW_DEFAULTS = { width: 1400, height: 900, x: undefined, y: undefined, maximized: false };
+function windowStateFrom(saved, workAreas) {
+  const s = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  const num = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+  const ws = { ...WINDOW_DEFAULTS, maximized: s.maximized === true };
+  if (num(s.width, 200, 20000) && num(s.height, 150, 20000)) { ws.width = Math.round(s.width); ws.height = Math.round(s.height); }
+  if (num(s.x, -50000, 50000) && num(s.y, -50000, 50000)) {
+    // kept only if the title bar is on a screen: 100 px of its width, its top edge inside
+    const onScreen = workAreas.some((a) =>
+      Math.min(s.x + ws.width, a.x + a.width) - Math.max(s.x, a.x) >= 100 && s.y >= a.y - 10 && s.y <= a.y + a.height - 40);
+    if (onScreen) { ws.x = Math.round(s.x); ws.y = Math.round(s.y); }
+  }
+  return ws;
+}
 function loadWindowState() {
-  try { if (fs.existsSync(stateFile)) return JSON.parse(fs.readFileSync(stateFile, "utf-8")); } catch {}
-  return { width: 1400, height: 900, x: undefined, y: undefined, maximized: false };
+  let saved = null;
+  try { if (fs.existsSync(stateFile)) saved = JSON.parse(fs.readFileSync(stateFile, "utf-8")); } catch {}
+  return windowStateFrom(saved, screen.getAllDisplays().map((d) => d.workArea));
 }
 let saveStateTimer = null;
 function saveWindowState() {
@@ -972,6 +991,11 @@ app.whenReady().then(async () => {
   if (process.platform === "win32") app.setAppUserModelId("com.jamescupps.noteforge");
   createWindow();
   setupAutoUpdater();
+}).catch((e) => {
+  // A start-up failure used to leave the process running with no window, and a second
+  // launch only "focused" that: say what went wrong and quit instead
+  try { dialog.showErrorBox("NoteForge couldn't start", (e && e.message) || String(e)); } catch {}
+  app.quit();
 });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 app.on("activate", () => { if (!mainWindow) createWindow(); });
@@ -984,7 +1008,11 @@ const configFile = path.join(userDataPath, "noteforge-config.json");
 
 function loadConfig() {
   try {
-    if (fs.existsSync(configFile)) return JSON.parse(fs.readFileSync(configFile, "utf-8"));
+    if (fs.existsSync(configFile)) {
+      // (valid JSON that isn't an object, such as null, would break every caller)
+      const cfg = JSON.parse(fs.readFileSync(configFile, "utf-8"));
+      if (cfg && typeof cfg === "object" && !Array.isArray(cfg)) return cfg;
+    }
   } catch {}
   return { autoUpdate: true };
 }
@@ -1098,3 +1126,6 @@ ipcMain.handle("get-update-status", async () => ({
   loadError: autoUpdaterLoadError,
   lastError: lastUpdateError,
 }));
+
+// For the tests (test/helpers/main_harness.js), which can't open a window
+module.exports = { windowStateFrom };
