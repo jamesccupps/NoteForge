@@ -9,8 +9,8 @@
   <!-- SRI is not used here because these scripts ship locally inside the app bundle.
        Electron's file:// loader enforces CORS when `crossorigin` is set, which blocks
        local scripts silently. In packaged builds the embedded-asar-integrity fuse
-       (package.json build.electronFuses) checks bundled files instead; the installer
-       itself is not code-signed. -->
+       (package.json build.electronFuses) checks bundled files instead, and from 2.9.1
+       the installer, the portable exe and the app are code-signed. -->
   <script src="lib/react.min.js"></script>
   <script src="lib/react-dom.min.js"></script>
   <script src="lib/purify.min.js"></script>
