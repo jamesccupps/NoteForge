@@ -559,7 +559,7 @@ function ShortcutsDialog({
   useEffect(() => {
     ref.current?.focus();
   }, []);
-  const rows = [["Ctrl+N", "New Page"], ["Ctrl+Shift+N", "New Notebook"], ["Ctrl+B / I / U", "Bold / Italic / Underline"], ["Ctrl+D", "Duplicate Page"], ["Ctrl+F", "Find & Replace"], ["Ctrl+L", "Lock App"], ["Ctrl+Z / Ctrl+Y", "Undo / Redo"], ["Ctrl+= / Ctrl+-", "Zoom In / Out"], ["Ctrl+\\", "Toggle Sidebar"], ["Ctrl+Shift+D", "Toggle Theme"], ["Ctrl+Right Shift", "Paragraph right to left"], ["Ctrl+Left Shift", "Paragraph left to right"], ["Ctrl+P", "Print"], ["Ctrl+Shift+E", "Export HTML"], ["F1", "This dialog"]];
+  const rows = [["Ctrl+N", "New Page"], ["Ctrl+Shift+N", "New Notebook"], ["Ctrl+B / I / U", "Bold / Italic / Underline"], ["Ctrl+D", "Duplicate Page"], ["Ctrl+F", "Find & Replace"], ["Ctrl+L", "Lock App"], ["Ctrl+Z / Ctrl+Y", "Undo / Redo"], ["Ctrl+= / Ctrl+- / Ctrl+0", "Zoom In / Out / Reset"], ["Ctrl+\\", "Toggle Sidebar"], ["Ctrl+Shift+D", "Toggle Theme"], ["Ctrl+Right Shift", "Paragraph right to left"], ["Ctrl+Left Shift", "Paragraph left to right"], ["Ctrl+P", "Print"], ["Ctrl+Shift+E", "Export HTML"], ["F1", "This dialog"]];
   return /*#__PURE__*/React.createElement("div", {
     className: "nf-modal-overlay",
     onMouseDown: e => {
@@ -996,41 +996,6 @@ function I({
       points: "13,15 11,18 13,21"
     }), /*#__PURE__*/React.createElement("path", {
       d: "M3 18h4"
-    })),
-    zin: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("circle", {
-      cx: "11",
-      cy: "11",
-      r: "8"
-    }), /*#__PURE__*/React.createElement("line", {
-      x1: "21",
-      y1: "21",
-      x2: "16.65",
-      y2: "16.65"
-    }), /*#__PURE__*/React.createElement("line", {
-      x1: "11",
-      y1: "8",
-      x2: "11",
-      y2: "14"
-    }), /*#__PURE__*/React.createElement("line", {
-      x1: "8",
-      y1: "11",
-      x2: "14",
-      y2: "11"
-    })),
-    zout: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("circle", {
-      cx: "11",
-      cy: "11",
-      r: "8"
-    }), /*#__PURE__*/React.createElement("line", {
-      x1: "21",
-      y1: "21",
-      x2: "16.65",
-      y2: "16.65"
-    }), /*#__PURE__*/React.createElement("line", {
-      x1: "8",
-      y1: "11",
-      x2: "14",
-      y2: "11"
     })),
     palette: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("circle", {
       cx: "13.5",
@@ -4208,24 +4173,6 @@ function NoteForge() {
     label: "Word Wrap",
     onClick: () => setWrap(!wrap),
     active: wrap,
-    s: 13
-  }), /*#__PURE__*/React.createElement(Btn, {
-    icon: "zin",
-    label: "Zoom In",
-    onClick: () => setZoom(z => Math.min(200, z + 10)),
-    s: 13
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10,
-      color: "var(--text-muted)",
-      minWidth: 28,
-      textAlign: "center",
-      userSelect: "none"
-    }
-  }, zoom, "%"), /*#__PURE__*/React.createElement(Btn, {
-    icon: "zout",
-    label: "Zoom Out",
-    onClick: () => setZoom(z => Math.max(50, z - 10)),
     s: 13
   })), showFR && /*#__PURE__*/React.createElement("div", {
     className: "nf-find-bar fade-in"

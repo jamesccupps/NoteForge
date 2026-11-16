@@ -357,7 +357,7 @@ function ShortcutsDialog({onClose,dark}){
     ["Ctrl+N","New Page"],["Ctrl+Shift+N","New Notebook"],
     ["Ctrl+B / I / U","Bold / Italic / Underline"],["Ctrl+D","Duplicate Page"],
     ["Ctrl+F","Find & Replace"],["Ctrl+L","Lock App"],
-    ["Ctrl+Z / Ctrl+Y","Undo / Redo"],["Ctrl+= / Ctrl+-","Zoom In / Out"],
+    ["Ctrl+Z / Ctrl+Y","Undo / Redo"],["Ctrl+= / Ctrl+- / Ctrl+0","Zoom In / Out / Reset"],
     ["Ctrl+\\","Toggle Sidebar"],["Ctrl+Shift+D","Toggle Theme"],
     ["Ctrl+Right Shift","Paragraph right to left"],["Ctrl+Left Shift","Paragraph left to right"],
     ["Ctrl+P","Print"],["Ctrl+Shift+E","Export HTML"],["F1","This dialog"],
@@ -421,8 +421,6 @@ function I({n,s=16}){
     sidebar:<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></>,
     table:<><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></>,
     wrap:<><path d="M3 6h18"/><path d="M3 12h15a3 3 0 110 6h-4"/><polyline points="13,15 11,18 13,21"/><path d="M3 18h4"/></>,
-    zin:<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></>,
-    zout:<><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></>,
     palette:<><circle cx="13.5" cy="6.5" r="2"/><circle cx="17.5" cy="10.5" r="2"/><circle cx="8.5" cy="7.5" r="2"/><circle cx="6.5" cy="12" r="2"/><path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10c1.38 0 2.5-1.12 2.5-2.5 0-.61-.23-1.2-.64-1.67-.08-.1-.13-.21-.13-.33 0-.28.22-.5.5-.5H16c3.31 0 6-2.69 6-6 0-5.51-4.49-10-10-10z"/></>,
     hl:<><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></>,
     dl:<><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></>,
@@ -1970,9 +1968,8 @@ function NoteForge(){
         <Btn icon="hr" label="Horizontal Rule" onClick={()=>exec("insertHorizontalRule")} s={13}/><div className="tb-sep"/>
         <Btn icon="search" label="Find & Replace" onClick={()=>showFR?closeFind():openFind()} active={showFR} s={13}/>
         <Btn icon="wrap" label="Word Wrap" onClick={()=>setWrap(!wrap)} active={wrap} s={13}/>
-        <Btn icon="zin" label="Zoom In" onClick={()=>setZoom(z=>Math.min(200,z+10))} s={13}/>
-        <span style={{fontSize:10,color:"var(--text-muted)",minWidth:28,textAlign:"center",userSelect:"none"}}>{zoom}%</span>
-        <Btn icon="zout" label="Zoom Out" onClick={()=>setZoom(z=>Math.max(50,z-10))} s={13}/>
+        {/* (zoom moved out of the toolbar for the direction buttons in 2.10: it's in the
+            View menu, Ctrl+= / Ctrl+- / Ctrl+0, and the status bar shows it) */}
       </div>
       {showFR&&<div className="nf-find-bar fade-in">
         <input ref={findInputRef} className="nf-find-input" dir="auto" style={{width:160}} placeholder="Find…" value={findT} onChange={e=>setFindT(e.target.value)}

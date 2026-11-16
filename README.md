@@ -289,7 +289,7 @@ Press **F1** in the app for an interactive cheat sheet.
 | Ctrl+L | Lock App |
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
 | Ctrl+Right Shift / Ctrl+Left Shift | Paragraph Right to Left / Left to Right |
-| Ctrl+= / Ctrl+- | Zoom In / Out |
+| Ctrl+= / Ctrl+- / Ctrl+0 | Zoom In / Out / Reset (also in the View menu) |
 | Ctrl+\\ | Toggle Sidebar |
 | Ctrl+Shift+D | Toggle Theme |
 | Ctrl+P | Print |
