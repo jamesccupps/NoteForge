@@ -1292,6 +1292,27 @@ SCENARIOS.damagedVaultOffersRestore = {
   },
 };
 
+// Find, ignoring case, in text with a character whose lower case is longer (Turkish İ is
+// two characters lower-cased): offsets from the lower-cased text, applied to the original,
+// put every later match one character off, and a match at a text's end threw.
+SCENARIOS.findWithLongerLowercase = {
+  seed: () => {
+    const d = seedBase();
+    d.notebooks[0].sections[0].pages[0].content = "<p>İİ ab İstanbul ab</p>";
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`${R.editorText}.includes("İstanbul")`);
+    c.menu("find-replace");
+    await c.waitFor(`document.querySelectorAll(".nf-find-input").length===2`);
+    await c.js(R.type(`document.querySelectorAll(".nf-find-input")[0]`, "ab"));
+    await c.sleep(400);
+    const found = await c.js(`[...(CSS.highlights.get("nf-find")||[])].map(r=>r.toString())`);
+    c.check("both matches found", Array.isArray(found) && found.length === 2, JSON.stringify(found));
+    c.check("...and each highlight covers \"ab\"", Array.isArray(found) && found.every((s) => s === "ab"), JSON.stringify(found));
+  },
+};
+
 // With Caps Lock on, Ctrl+D and Ctrl+H arrive as "D" and "H": the shortcuts compared
 // lowercase letters only and did nothing. Ctrl+Shift+D stays the menu's Toggle Theme.
 SCENARIOS.capsLockShortcuts = {

@@ -1352,14 +1352,19 @@ function NoteForge(){
   // Replace used to do nothing. Matches are collected by walking the editor's text nodes
   // (a match must sit inside one text node, same as Replace All) and shown with the CSS
   // Custom Highlight API, which leaves focus in the find box so Enter keeps going.
+  // Matches are found in the text as it is, so their offsets are the text's own. Lower-casing
+  // it first moved them wherever a character's lower case is longer (Turkish İ is two
+  // characters lower-cased): later matches landed a character off, one at a text's end threw.
   const findMatches=(q)=>{
     const out=[];if(!q||!edRef.current)return out;
-    const needle=findCase?q:q.toLowerCase();
+    const pat=q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    let re;
+    try{re=new RegExp(pat,findCase?"gu":"giu")}catch{re=new RegExp(pat,findCase?"g":"gi")}
     const w=document.createTreeWalker(edRef.current,NodeFilter.SHOW_TEXT,null);
     while(w.nextNode()){
-      const n=w.currentNode,hay=findCase?n.textContent:n.textContent.toLowerCase();
-      for(let i=hay.indexOf(needle);i!==-1;i=hay.indexOf(needle,i+needle.length)){
-        const r=document.createRange();r.setStart(n,i);r.setEnd(n,i+q.length);out.push(r);
+      const n=w.currentNode;let m;re.lastIndex=0;
+      while((m=re.exec(n.textContent))){
+        const r=document.createRange();r.setStart(n,m.index);r.setEnd(n,m.index+m[0].length);out.push(r);
       }
     }
     return out;

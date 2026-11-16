@@ -13,6 +13,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 - **File → New Notebook on the lock screen** did nothing but log an error. It's now ignored there, as New Page already was.
 - **Ctrl+D (duplicate page) and Ctrl+H (find) work with Caps Lock on.**
 - **Large pasted screenshots are made smaller.** A PNG narrower than 1600 px went into the note at full size (a 4 MB screenshot added about 5 MB to the notes file). A large picture without transparency is now stored as a JPEG; one with transparency stays PNG.
+- **Find in text with a Turkish İ** (or another letter whose lower case is longer) highlighted every later match a character off, and could stop with an error. Matches are now found in the text as it is.
 
 ### Security
 - **A password change removes the restore's rollback copy.** Restore from Backup keeps the vault as it was before (`noteforge-data.enc.pre-restore.bak`), under the password it had then. Changing the master password deleted the earlier versions but not this copy, so the old password still opened the old notes. It's now removed with them, and when encryption is turned off.
