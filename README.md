@@ -49,54 +49,6 @@ Full history is in [CHANGELOG.md](CHANGELOG.md).
 
 **2.9.1 (signed builds):** the installer, the portable exe and the app are code-signed by James Cupps, and from now on the app installs an update only if it carries that signature. No other changes from 2.9.0.
 
-**2.9.0 (review fixes):**
-- **Data loss fixed:**
-  - Edits in a password-protected notebook are no longer lost on Re-lock, Lock or close (a bug since 2.5.0).
-  - Two copies of NoteForge can no longer overwrite each other.
-  - Saves never overwrite the vault in place.
-  - Non-default encryption settings no longer lock you out after a save.
-  - A slow image paste can't land on another page.
-- **New:**
-  - The last 3 versions of the encrypted vault are kept.
-  - First run offers a master password.
-  - Find & Replace gains Match case, and Replace All can be undone.
-  - A damaged vault offers Restore on the lock screen.
-- **Portable:** notes live next to the exe.
-- **Security:** notes can't imitate the app, tighter checks around encryption and the IPC, a stricter CSP, and DevTools off in packaged builds. Electron 44.10.2 and DOMPurify 3.4.17.
-
-**2.8.2 / 2.8.1 (editor and UI pass):** 2.8.2 republishes 2.8.1, whose release lost its installer.
-- **Now works:** checklist ticks are saved, Find & Replace works, and printing gives just the note.
-- **Editing:** font sizes match their labels, and Tab / Shift+Tab indent lists and move between table cells.
-- **Code blocks, quotes and checklists:** Enter can leave code blocks and quotes, and checklists continue with Enter.
-- **Search and dark theme:** search finds `&` and `<`, and highlights are readable in the dark theme.
-- **Password and keyboard:** Change Password checks the current password first, and Escape closes dialogs and menus.
-
-**2.8.0 (audit release):**
-
-- **Data-loss fixes:**
-  - "Remove Password" on a still-locked notebook no longer deletes its pages.
-  - Closing Trash no longer blanks the editor, which used to let the next keystroke overwrite the page.
-  - Restoring over unencrypted notes now keeps a rollback copy.
-  - Saves are atomic.
-  - Failed saves say so instead of showing "Saved".
-- **Security fixes:**
-  - No plaintext file is written while the app is locked.
-  - Locked-notebook plaintext is stripped in the main process on every save.
-  - Note images can't trigger SMB connections.
-  - All navigation is blocked.
-  - The renderer can't disable its sandbox.
-  - Restore installs only the file you picked.
-  - scrypt parameters are bounded on decrypt.
-  - The packaged app ships with Electron fuses set.
-- **Fixed:**
-  - File → Export as HTML/Text.
-  - Context-menu Paste.
-  - Export/print warnings for pages in an unlocked password-protected notebook.
-  - Replace All with `$` in the replacement text.
-  - The About version.
-- **Updated:** Electron 33 → 44, electron-builder 26, bundled DOMPurify 3.4.16.
-- **Tests and CI:** tests now exercise the real `main.js` and the shipped sanitizer, plus an end-to-end suite and a CI workflow on every push.
-
 ## Install
 
 ### Download (Windows)
