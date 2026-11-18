@@ -10,6 +10,11 @@
 # DOMPurify is kept out of the group: lib/purify.min.js is what ships, and
 # test/test_install.js fails until it matches the devDependency. Its pull request
 # needs `npm run vendor:dompurify` committed on the same branch before merging.
+#
+# A new Babel major comes as one pull request for all of @babel/*: every Babel
+# package needs @babel/core of the same major, so one at a time can't install.
+# (Groups are matched in order; Babel's minor and patch updates fall through to
+# the npm group.)
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -27,6 +32,9 @@ updates:
       interval: "monthly"
     versioning-strategy: "increase"
     groups:
+      babel:
+        patterns: ["@babel/*"]
+        update-types: ["major"]
       npm:
         patterns: ["*"]
         exclude-patterns: ["dompurify"]
