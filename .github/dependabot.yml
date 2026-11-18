@@ -1,0 +1,35 @@
+# Dependabot keeps two things current, once a month:
+#
+# - The workflows' actions, pinned by commit SHA (it understands the `# v7.0.1`
+#   comment convention and updates the SHA and the comment together). One pull
+#   request for all of them.
+# - The npm packages: Electron and electron-updater ship inside the app, so their
+#   security fixes matter. Minor and patch updates come as one pull request; a
+#   new major version (Electron's every few months) comes on its own.
+#
+# DOMPurify is kept out of the group: lib/purify.min.js is what ships, and
+# test/test_install.js fails until it matches the devDependency. Its pull request
+# needs `npm run vendor:dompurify` committed on the same branch before merging.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "CI"
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    versioning-strategy: "increase"
+    groups:
+      npm:
+        patterns: ["*"]
+        exclude-patterns: ["dompurify"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "Deps"
