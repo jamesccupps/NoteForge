@@ -86,7 +86,7 @@
     "electron-updater": "^6.8.11"
   },
   "devDependencies": {
-    "@babel/cli": "^7.28.6",
+    "@babel/cli": "^8.1.0",
     "@babel/preset-react": "^7.28.5",
     "@electron/fuses": "1.8.0",
     "dompurify": "3.4.17",
