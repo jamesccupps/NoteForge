@@ -92,6 +92,6 @@
     "dompurify": "3.4.17",
     "electron": "^44.11.1",
     "electron-builder": "^26.15.3",
-    "jsdom": "^25.0.0"
+    "jsdom": "^31.0.1"
   }
 }
