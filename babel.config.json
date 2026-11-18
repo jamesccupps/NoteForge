@@ -1,0 +1,4 @@
+{
+  "presets": [["@babel/preset-react", { "runtime": "classic", "development": false }]],
+  "generatorOpts": { "jsescOption": { "minimal": false } }
+}

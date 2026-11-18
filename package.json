@@ -14,7 +14,7 @@
   },
   "scripts": {
     "start": "electron .",
-    "build:jsx": "babel app.jsx --out-file app.js --presets=@babel/preset-react",
+    "build:jsx": "babel app.jsx --out-file app.js",
     "test": "node test/test_crypto.js && node test/test_storage.js && node test/test_backup.js && node test/test_xss.js && node test/test_input_hook.js && node test/test_install.js",
     "test:crypto": "node test/test_crypto.js",
     "test:storage": "node test/test_storage.js && node test/test_backup.js",
@@ -86,8 +86,9 @@
     "electron-updater": "^6.8.11"
   },
   "devDependencies": {
-    "@babel/cli": "^7.28.6",
-    "@babel/preset-react": "^7.28.5",
+    "@babel/cli": "^8.1.0",
+    "@babel/core": "^8.1.2",
+    "@babel/preset-react": "^8.0.1",
     "@electron/fuses": "2.1.3",
     "dompurify": "3.4.18",
     "electron": "^44.11.1",
