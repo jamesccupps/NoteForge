@@ -1351,6 +1351,49 @@ SCENARIOS.rtlWriting = {
   },
 };
 
+// Each keystroke re-rendered the page list, and every page's preview stripped and decoded
+// that page's whole content again: about 60 ms a keystroke in a 341-page section. A page's
+// text is now worked out once per version of the page. Timed against a one-page section in
+// the same run, so a slow machine slows both. MessageChannel, not requestAnimationFrame or
+// setTimeout, waits for React's render: those stall when the test window is covered.
+SCENARIOS.pageListTypingSpeed = {
+  seed: () => {
+    const d = seedBase();
+    const body = "<p>" + "lorem ipsum dolor sit amet &amp; more ".repeat(120) + "</p>";
+    const pages = [];
+    for (let i = 0; i < 400; i++) pages.push({ ...page("big-" + i, "Big " + i, body), modified: 1000 + i });
+    d.notebooks[0].sections.push({ id: "sec-big", name: "Big", color: "#22aa66", pages });
+    return d;
+  },
+  async run(c) {
+    await c.waitFor(`document.querySelectorAll(".nf-pg").length===1`);
+    const perKey = () => c.js(`(async()=>{
+      const ed=document.querySelector(".nf-editor");ed.focus();const s=getSelection();s.selectAllChildren(ed.querySelector("p")||ed);s.collapseToEnd();
+      const yieldNow=()=>new Promise(r=>{const ch=new MessageChannel();ch.port1.onmessage=()=>r();ch.port2.postMessage(0)});
+      const ts=[];
+      for(let i=0;i<21;i++){const t0=performance.now();document.execCommand("insertText",false,"z");await yieldNow();await yieldNow();ts.push(performance.now()-t0)}
+      ts.sort((a,b)=>a-b);return ts[10]})()`);
+    const small = await perKey();
+    await c.js(`[...document.querySelectorAll(".nf-sec")].find(e=>e.textContent.includes("Big")).click()`);
+    await c.waitFor(`document.querySelectorAll(".nf-pg").length===400`);
+    await c.js(`[...document.querySelectorAll(".nf-pg")].find(p=>p.querySelector(".nf-pg-title").textContent.trim()==="Big 7").click()`);
+    await c.waitFor(`document.querySelector(".nf-title-input").value==="Big 7"`);
+    const big = await perKey();
+    c.check(`typing in a 400-page section costs about what it does in a 1-page one (${big.toFixed(1)} vs ${small.toFixed(1)} ms)`, big < small + 20, `${big.toFixed(1)} vs ${small.toFixed(1)}`);
+
+    // the cached text follows the page: its preview and search see what was just typed
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const s=getSelection();s.selectAllChildren(ed);document.execCommand("insertText",false,"fresh words here")})()`);
+    await c.waitFor(`[...document.querySelectorAll(".nf-pg")].some(p=>p.querySelector(".nf-pg-title").textContent.trim()==="Big 7"&&p.querySelector(".nf-pg-preview").textContent==="fresh words here")`, 4000).catch(() => {});
+    c.check("the edited page's preview shows the new text", await c.js(`[...document.querySelectorAll(".nf-pg")].some(p=>p.querySelector(".nf-pg-title").textContent.trim()==="Big 7"&&p.querySelector(".nf-pg-preview").textContent==="fresh words here")`));
+    c.check("another page's preview is unchanged (entities decoded)", await c.js(`[...document.querySelectorAll(".nf-pg")].find(p=>p.querySelector(".nf-pg-title").textContent.trim()==="Big 3").querySelector(".nf-pg-preview").textContent.startsWith("lorem ipsum dolor sit amet & more")`));
+    await c.js(`document.querySelector("input[placeholder^='Search all']").focus()`);
+    await c.js(R.type(`document.querySelector("input[placeholder^='Search all']")`, "fresh words"));
+    const hits = `[...document.querySelectorAll(".nf-gsearch-item")].map(e=>e.firstChild.textContent).join("|")`;
+    await c.waitFor(`${hits}==="Big 7"`, 4000).catch(() => {});
+    c.check("search finds the newly typed words, on that page only", (await c.js(hits)) === "Big 7", await c.js(hits));
+  },
+};
+
 // The status bar counted words by spaces, so a paragraph of Chinese, Japanese or Thai (no
 // spaces between words) was one word. Text with spaces must count as it did before.
 SCENARIOS.wordCountScripts = {

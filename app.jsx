@@ -101,7 +101,20 @@ const prefsStore={
 /* ═══════════════════════════════════════════════════════════════
    UTILITIES
    ═══════════════════════════════════════════════════════════════ */
-const snippet=(html)=>html?decodeEntities(html.replace(/<[^>]*>/g," ")).replace(/\s+/g," ").trim().slice(0,80):"";
+// A page's text (tags removed, entities decoded) as the page list's preview and the search
+// box use it, worked out once per version of the page. Both read every page on every
+// keystroke; redoing it each time cost about 60 ms a keystroke in a 341-page section. An
+// edit replaces only that page's object, so the other pages keep their entries.
+const _pageText=new WeakMap();
+const pageText=(pg)=>{
+  let v=_pageText.get(pg);
+  if(!v){
+    const text=pg.content?decodeEntities(pg.content.replace(/<[^>]*>/g," ")):"";
+    v={preview:text.replace(/\s+/g," ").trim().slice(0,80),search:(pg.title+" "+text).toLowerCase()};
+    _pageText.set(pg,v);
+  }
+  return v;
+};
 // Words for the status bar. Chinese, Japanese, Thai, Lao, Khmer and Burmese don't put spaces
 // between words, so counting by spaces made a whole paragraph one word. Runs in those scripts
 // go through the browser's word breaker (ICU has dictionaries for exactly these); text with
@@ -1530,10 +1543,9 @@ function NoteForge(){
       const q=gSearch.toLowerCase(),res=[];
       for(const nb of data.notebooks)for(const sec of nb.sections||[])for(const pg of sec.pages){
         if(pg.deleted)continue;
-        // Decode entities: searching the stored HTML missed "&" / "<" (saved as &amp; / &lt;)
-        // and matched "amp" or "lt" in text that has neither.
-        const text=(pg.title+" "+decodeEntities((pg.content||"").replace(/<[^>]*>/g," "))).toLowerCase();
-        if(text.includes(q))res.push({nbId:nb.id,secId:sec.id,page:pg,nbName:nb.name,secName:sec.name});
+        // pageText decodes entities: searching the stored HTML missed "&" / "<" (saved as
+        // &amp; / &lt;) and matched "amp" or "lt" in text that has neither.
+        if(pageText(pg).search.includes(q))res.push({nbId:nb.id,secId:sec.id,page:pg,nbName:nb.name,secName:sec.name});
       }
       setGResults(res);
     },150);
@@ -1821,7 +1833,7 @@ function NoteForge(){
             if(idx===-1)return text;
             return <>{text.slice(0,idx)}<mark style={{background:"var(--accent-bg)",color:"var(--accent)",borderRadius:2,padding:"0 1px"}}>{text.slice(idx,idx+gSearch.length)}</mark>{text.slice(idx+gSearch.length)}</>;
           };
-          const preview=snippet(r.page.content);
+          const preview=pageText(r.page).preview;
           return <div key={r.page.id} className="nf-gsearch-item"
           onMouseDown={e=>{e.preventDefault();navigateTo(r.nbId,r.secId,r.page.id);setGSearch("")}}>
           <div style={{fontSize:13,fontWeight:600}}>{hl(r.page.title)}</div>
@@ -1928,7 +1940,7 @@ function NoteForge(){
             {pg.pinned&&<span className="nf-pg-pin">📌 </span>}
             {editId===pg.id?<RenameInput id={pg.id} initialValue={editVal} onRename={rename} onCancel={()=>setEditId(null)}/>:pg.title}
           </div>
-          <div className="nf-pg-preview" dir="auto">{snippet(pg.content)}</div>
+          <div className="nf-pg-preview" dir="auto">{pageText(pg).preview}</div>
           <div className="nf-pg-meta">{showDate(pg.modified)}</div>
         </div>)}
     </div>

@@ -10,6 +10,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 - **DOMPurify 3.4.18**, the library that cleans pasted and loaded notes of anything that could run.
 - The app is now built with Babel 8. The built `app.js` is byte for byte what Babel 7 made.
 
+### Fixed
+- **Typing no longer slows down in a section with many pages.** Every keystroke redrew the page list, and each page's preview was worked out again from that page's whole content: in a section of 400 pages a keystroke took about 100 ms of work instead of 4. Each page's preview and search text are now worked out once per version of the page (about 6 ms a keystroke there). Searching all notes while editing gets the same saving.
+
 ## [2.10.0] — 2026-11-16
 
 Right-to-left writing, asked for in [#2](https://github.com/jamesccupps/NoteForge/issues/2), and word counts for languages written without spaces.
