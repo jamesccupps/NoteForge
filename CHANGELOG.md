@@ -5,6 +5,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+### Added
+- **NoteForge locks when Windows does.** Locking Windows (Win+L), the screen locking on its own, or the PC going to sleep now locks NoteForge too, as Ctrl+L does: anything not yet saved is saved first. Before, only NoteForge's own idle timer locked it, so notes could stay open behind a locked or sleeping PC until it ran out. Needs a master password, like every lock.
+
 ### Changed
 - **Electron 45** (Chromium 156), from 44.11.1. Brings the newer browser engine's security fixes.
 - **DOMPurify 3.4.18**, the library that cleans pasted and loaded notes of anything that could run.

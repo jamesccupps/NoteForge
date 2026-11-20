@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, dialog, ipcMain, session, screen } = require("electron");
+const { app, BrowserWindow, Menu, shell, dialog, ipcMain, session, screen, powerMonitor } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
@@ -991,6 +991,13 @@ app.whenReady().then(async () => {
   // with the correct icon instead of under generic "Electron"
   if (process.platform === "win32") app.setAppUserModelId("com.jamescupps.noteforge");
   createWindow();
+  // Lock with Windows: when the session locks (Win+L, or the screen locking for sleep) and
+  // when the PC is about to sleep. Before, only NoteForge's own idle timer locked it, so
+  // notes stayed open behind a locked or sleeping PC. Same path as Ctrl+L: the renderer
+  // saves first, and does nothing without a master password.
+  for (const ev of ["lock-screen", "suspend"]) {
+    powerMonitor.on(ev, () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("menu-action", "lock-app"); });
+  }
   setupAutoUpdater();
 }).catch((e) => {
   // A start-up failure used to leave the process running with no window, and a second

@@ -20,7 +20,7 @@
 - **Right-to-left writing** — Arabic, Farsi, Hebrew and other right-to-left text lines up on the right by itself, paragraph by paragraph, next to English. The Right to Left / Left to Right toolbar buttons (or Ctrl+Right Shift / Ctrl+Left Shift) fix a paragraph's or list's direction, which also moves its bullets, indent and quote bar to that side. Page titles and notebook, section and page names show in their own direction. The menus stay in English
 - **Image auto-downscale** — Pasted photos are automatically resized to 1600px and JPEG-compressed
 - **Find & Replace** — Highlights every match with a live count; Enter / Shift+Enter step through them; match case; replace one or all (undoable)
-- **Auto-lock** — Configurable idle timeout (5/15/30/60 min) + Ctrl+L manual lock + per-notebook "Re-lock Now"
+- **Auto-lock** — Configurable idle timeout (5/15/30/60 min), locks when Windows locks or the PC sleeps, Ctrl+L manual lock, per-notebook "Re-lock Now"
 - **Encrypted backup** — Export/restore `.enc` backup files. Restore checks the backup password before touching anything and keeps a rollback copy of your current notes
 - **Crash-safe saves** — The data file is written to a temp file, flushed, and renamed into place, so a crash mid-save can't truncate it. If another program holds the file, the save is retried rather than written in place
 - **Earlier versions** — With encryption on, the vault as it was at each of the last 3 unlocks is kept (`noteforge-data.prev-1.enc` is the newest); open one with File → Restore from Backup
@@ -127,7 +127,7 @@ Output goes to `dist/`. The `predist` hook runs tests before building — if any
 | Notebook locks | AES-256-GCM | scrypt N=65536, r=8, p=1 |
 
 - Master password is **never stored** — only the derived key (Buffer) lives in memory during the session
-- Session key is zeroed (`Buffer.fill(0)`) on lock, close, and idle timeout
+- Session key is zeroed (`Buffer.fill(0)`) on lock, close, idle timeout, and when Windows locks or sleeps
 - While the app is locked the main process **refuses to write** the data file, so a late save can't leave a decrypted copy next to the `.enc` file
 - Password-protected notebooks that are open are **encrypted by the main process on every save**, with the key cached at unlock, and their plaintext is stripped before the write
 - **Per-notebook** rate limiting with exponential backoff on failed password attempts (persisted across restarts). This only slows guessing *through the app*; against a copied data file, the scrypt cost is the only barrier, so password strength is what matters

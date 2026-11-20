@@ -1351,6 +1351,47 @@ SCENARIOS.rtlWriting = {
   },
 };
 
+// Locking Windows (Win+L) or putting the PC to sleep left NoteForge unlocked: only its own
+// idle timer locked it. Now both lock it, as Ctrl+L does, when there's a master password.
+SCENARIOS.windowsLockLocksApp = {
+  seed: seedBase,
+  async run(c) {
+    const MPW = "Master!Passw0rd-e2e";
+    const { powerMonitor } = require("electron");
+    const locked = `!!document.querySelector(".nf-overlay-input")&&!document.querySelector(".nf-editor")`;
+    await c.waitFor(`!!document.querySelector(".nf-editor")`);
+    powerMonitor.emit("lock-screen");
+    await c.sleep(600);
+    c.check("no master password: Windows locking leaves the notes open", await c.js(`!!document.querySelector(".nf-editor")&&!document.querySelector(".nf-overlay-input")`));
+
+    await c.js(`window.electronAPI.enableEncryption(${JSON.stringify(MPW)},"")`);
+    c.win.webContents.reload();
+    const unlock = async () => {
+      await c.waitFor(`document.querySelector(".nf-overlay-input")`);
+      await c.js(R.type(`document.querySelector(".nf-overlay-input")`, MPW));
+      await c.js(`${R.button(".nf-overlay-btn", "Unlock")}.click()`);
+      await c.waitFor(`!!document.querySelector(".nf-editor")`);
+    };
+    await unlock();
+    // an edit still waiting for its save goes to disk before the lock
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const s=getSelection();s.selectAllChildren(ed);s.collapseToEnd();document.execCommand("insertText",false," typed before Win+L")})()`);
+    powerMonitor.emit("lock-screen");
+    await c.waitFor(locked, 4000).catch(() => {});
+    c.check("Windows locks (lock-screen): NoteForge locks", await c.js(locked));
+    await unlock();
+    c.check("...and the edit made just before it was saved", await c.js(`document.querySelector(".nf-editor").textContent.includes("typed before Win+L")`));
+    powerMonitor.emit("suspend");
+    await c.waitFor(locked, 4000).catch(() => {});
+    c.check("the PC goes to sleep (suspend): NoteForge locks", await c.js(locked));
+    // Windows sends both when a laptop sleeps; the second finds it locked already
+    powerMonitor.emit("lock-screen");
+    await c.sleep(600);
+    c.check("locking again while locked changes nothing", await c.js(locked));
+    await unlock();
+    c.check("...and it still unlocks", await c.js(`!!document.querySelector(".nf-editor")`));
+  },
+};
+
 // Each keystroke re-rendered the page list, and every page's preview stripped and decoded
 // that page's whole content again: about 60 ms a keystroke in a 341-page section. A page's
 // text is now worked out once per version of the page. Timed against a one-page section in
