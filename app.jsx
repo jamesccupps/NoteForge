@@ -623,6 +623,11 @@ function NoteForge(){
   const [editVal,setEditVal]=useState("");
   const [ctx,setCtx]=useState(null);
   const [edCtx,setEdCtx]=useState(null);
+  // The misspelled word under the editor menu's right-click, with Chromium's suggestions. It
+  // comes from main just after the contextmenu event (which is why the editor doesn't cancel
+  // that event): opening the menu clears it, and the message fills it in.
+  const [spell,setSpell]=useState(null);
+  useEffect(()=>window.electronAPI?.onSpelling?.(s=>setSpell(s)),[]);
   const [stats,setStats]=useState({w:0,c:0,l:0});
   const [saved,setSaved]=useState(true);
   const [saveFailed,setSaveFailed]=useState(false);
@@ -2031,7 +2036,7 @@ function NoteForge(){
           // Suppress the label's activation; the caret is already placed on mousedown.
           else if(t.closest?.(".nf-check label"))e.preventDefault();
         }}
-        onContextMenu={e=>{e.preventDefault();setEdCtx({x:e.clientX,y:e.clientY});setCtx(null)}}
+        onContextMenu={e=>{setSpell(null);setEdCtx({x:e.clientX,y:e.clientY});setCtx(null)}}
         style={{fontSize:`${14*zoom/100}px`,"--nf-fs":`${14*zoom/100}px`,whiteSpace:wrap?"pre-wrap":"pre",overflowX:wrap?"hidden":"auto",wordWrap:wrap?"break-word":"normal"}}/>
     </>
     :<div className="nf-empty">
@@ -2081,14 +2086,23 @@ function NoteForge(){
 
   {/* ═══ EDITOR CONTEXT MENU ══════════════════════════════════ */}
   {edCtx&&(()=>{
+    const sp=spell?.word?spell:null;
     const mx=Math.min(edCtx.x,window.innerWidth-200);
-    const my=Math.min(edCtx.y,window.innerHeight-320);
+    const my=Math.min(edCtx.y,window.innerHeight-320-(sp?(Math.max(1,sp.suggestions.length)+1)*30+9:0));
     const hasSel=window.getSelection()?.toString()?.length>0;
     const doCmd=(cmd)=>{exec(cmd);setEdCtx(null)};
     // (the items greyed out with no selection: clicked anyway, they did nothing visible but
     // toggled the style of what's typed next)
     const doSelCmd=(cmd)=>{if(hasSel)exec(cmd);setEdCtx(null)};
     return <div className="nf-ctx fade-in" style={{left:mx,top:my}}>
+      {sp&&<>
+        {sp.suggestions.length
+          ?sp.suggestions.map(w=><div key={w} className="nf-ctx-item" style={{fontWeight:600}} dir="auto"
+            onClick={()=>{edRef.current?.focus();window.electronAPI.replaceMisspelling(w);setEdCtx(null)}}>{w}</div>)
+          :<div className="nf-ctx-item disabled">No suggestions</div>}
+        <div className="nf-ctx-item" onClick={()=>{window.electronAPI.addToDictionary(sp.word);setEdCtx(null)}}>Add to Dictionary</div>
+        <div className="nf-ctx-sep"/>
+      </>}
       <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>{if(hasSel){document.execCommand("cut");setTimeout(()=>onInput(),10)}setEdCtx(null)}}><I n="scissors" s={13}/> Cut <span style={{marginLeft:"auto",fontSize:10,color:"var(--text-muted)"}}>Ctrl+X</span></div>
       <div className={`nf-ctx-item${!hasSel?" disabled":""}`} onClick={()=>{if(hasSel)document.execCommand("copy");setEdCtx(null)}}><I n="copy" s={13}/> Copy <span style={{marginLeft:"auto",fontSize:10,color:"var(--text-muted)"}}>Ctrl+C</span></div>
       {/* navigator.clipboard.readText() is refused by the deny-all permission handler, so

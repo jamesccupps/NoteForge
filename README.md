@@ -16,7 +16,7 @@
 - **AES-256-GCM encryption** — Master password encrypts all data at rest with scrypt key derivation (N=65536)
 - **Per-notebook locks** — Individual password for sensitive notebooks, with per-notebook brute-force rate limiting
 - **Fully offline** — All fonts, scripts, and dependencies bundled locally. The only network request is an optional update check against GitHub Releases on launch
-- **Rich text editor** — Bold, italic, headings, lists, tables, code blocks, links, images, checklists
+- **Rich text editor** — Bold, italic, headings, lists, tables, code blocks, links, images, checklists. Spellcheck (Windows' own) with corrections on right-click
 - **Right-to-left writing** — Arabic, Farsi, Hebrew and other right-to-left text lines up on the right by itself, paragraph by paragraph, next to English. The Right to Left / Left to Right toolbar buttons (or Ctrl+Right Shift / Ctrl+Left Shift) fix a paragraph's or list's direction, which also moves its bullets, indent and quote bar to that side. Page titles and notebook, section and page names show in their own direction. The menus stay in English
 - **Image auto-downscale** — Pasted photos are automatically resized to 1600px and JPEG-compressed
 - **Find & Replace** — Highlights every match with a live count; Enter / Shift+Enter step through them; match case; replace one or all (undoable)

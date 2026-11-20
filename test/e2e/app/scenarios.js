@@ -1351,6 +1351,73 @@ SCENARIOS.rtlWriting = {
   },
 };
 
+// Spellcheck underlined a misspelled word, but the editor's right-click menu (its own, which
+// cancelled the browser's, and with it Electron's report of the word) had no way to correct
+// it. Its suggestions now head the menu. A real right-click (sendInputEvent), because only
+// one makes Chromium look up the word under the pointer.
+SCENARIOS.spellingSuggestions = {
+  seed: () => { const d = seedBase(); d.notebooks[0].sections[0].pages[0].content = "<p>The quick helo wrold test</p>"; return d; },
+  async run(c) {
+    const { session } = require("electron");
+    await c.waitFor(`!!document.querySelector(".nf-editor p")`);
+    const seen = [];
+    c.win.webContents.on("context-menu", (_e, p) => seen.push(p.misspelledWord || "-"));
+    await c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const s=getSelection();s.selectAllChildren(ed);s.collapseToEnd();document.execCommand("insertText",false," ")})()`);
+    const rightClick = async (word) => {
+      const pt = JSON.parse(await c.js(`(()=>{const t=document.querySelector(".nf-editor p").firstChild;const i=t.textContent.indexOf(${JSON.stringify(word)});
+        const r=document.createRange();r.setStart(t,i+1);r.setEnd(t,i+2);const b=r.getBoundingClientRect();return JSON.stringify({x:Math.round(b.left+b.width/2),y:Math.round(b.top+b.height/2)})})()`));
+      c.win.focus();
+      c.win.webContents.sendInputEvent({ type: "mouseDown", x: pt.x, y: pt.y, button: "right", clickCount: 1 });
+      c.win.webContents.sendInputEvent({ type: "mouseUp", x: pt.x, y: pt.y, button: "right", clickCount: 1 });
+      await c.sleep(500);
+      return JSON.parse(await c.js(`JSON.stringify([...document.querySelectorAll(".nf-ctx-item")].map(e=>e.textContent.trim()))`));
+    };
+    const closeMenu = () => c.js(`document.body.click()`);
+    const item = (label) => `[...document.querySelectorAll(".nf-ctx-item")].find(e=>e.textContent.trim()===${JSON.stringify(label)})`;
+    const text = () => c.js(`document.querySelector(".nf-editor p").textContent`);
+
+    // The spellchecker marks words a moment after an edit, and not the word the caret is in
+    // (a right-click puts it there): each try types a space at the end, then waits.
+    const editAtEnd = () => c.js(`(()=>{const ed=document.querySelector(".nf-editor");ed.focus();const s=getSelection();s.selectAllChildren(ed);s.collapseToEnd();document.execCommand("insertText",false," ")})()`);
+    const spellClick = async (word, want) => {
+      let m = [];
+      for (let i = 0; i < 6 && !m.includes(want); i++) { await closeMenu(); await editAtEnd(); await c.sleep(2000); m = await rightClick(word); }
+      return m;
+    };
+    let menu = await spellClick("wrold", "world");
+    c.check("right-click on a misspelled word: its suggestion heads the menu", menu[0] === "world", JSON.stringify(menu) + " main saw " + JSON.stringify(seen));
+    c.check("...then Add to Dictionary, then the usual items", menu.includes("Add to Dictionary") && menu.some((t) => t.startsWith("Cut")), JSON.stringify(menu));
+    await c.js(`${item("world")}.click()`);
+    await c.waitFor(`document.querySelector(".nf-editor p").textContent.includes("helo world test")`, 3000).catch(() => {});
+    c.check("choosing it corrects the word", (await text()).includes("helo world test"), await text());
+    const saved = await c.waitForData((d) => d.notebooks[0].sections[0].pages[0].content.includes("helo world test"), 4000).catch(() => null);
+    c.check("...and the correction is saved", !!saved);
+    await c.js(`document.querySelector(".nf-editor").focus();document.execCommand("undo")`);
+    c.check("...and Ctrl+Z undoes it", (await text()).includes("helo wrold test"), await text());
+
+    await closeMenu(); await c.sleep(300);
+    menu = await rightClick("quick");
+    c.check("a correctly spelled word: just the usual menu", menu[0].startsWith("Cut") && !menu.includes("Add to Dictionary"), JSON.stringify(menu));
+
+    // Add to Dictionary writes to Windows' own dictionary, outside the test's data folder:
+    // record the call instead, on the session object main.js uses (checked to be one object)
+    const ses = session.defaultSession;
+    const shared = ses === session.defaultSession && c.win.webContents.session === ses;
+    c.check("(test) the window uses the default session", shared);
+    if (!shared) return;
+    const added = [];
+    ses.addWordToSpellCheckerDictionary = (w) => { added.push(w); return true; };
+    try {
+      menu = await spellClick("helo", "Add to Dictionary");
+      await c.js(`${item("Add to Dictionary")}?.click()`);
+      await c.sleep(300);
+      c.check("Add to Dictionary adds the word", JSON.stringify(added) === '["helo"]', JSON.stringify(added));
+    } finally {
+      delete ses.addWordToSpellCheckerDictionary;
+    }
+  },
+};
+
 // Locking Windows (Win+L) or putting the PC to sleep left NoteForge unlocked: only its own
 // idle timer locked it. Now both lock it, as Ctrl+L does, when there's a master password.
 SCENARIOS.windowsLockLocksApp = {

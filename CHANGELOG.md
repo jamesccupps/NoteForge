@@ -7,6 +7,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ### Added
 - **NoteForge locks when Windows does.** Locking Windows (Win+L), the screen locking on its own, or the PC going to sleep now locks NoteForge too, as Ctrl+L does: anything not yet saved is saved first. Before, only NoteForge's own idle timer locked it, so notes could stay open behind a locked or sleeping PC until it ran out. Needs a master password, like every lock.
+- **Spelling corrections on right-click.** Spellcheck underlined misspelled words, but the editor's right-click menu had no way to fix them. Right-clicking an underlined word now puts Windows' suggestions at the top of the menu, plus Add to Dictionary (Windows' own dictionary, shared with other apps). A correction can be undone with Ctrl+Z.
 
 ### Changed
 - **Electron 45** (Chromium 156), from 44.11.1. Brings the newer browser engine's security fixes.

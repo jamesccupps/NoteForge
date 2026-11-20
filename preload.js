@@ -34,6 +34,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   printWithWarning: (isLocked) => ipcRenderer.invoke("print-with-warning", isLocked),
   openDataFolder: () => ipcRenderer.invoke("open-data-folder"),
   paste: () => ipcRenderer.invoke("paste"),
+  // Spelling (editor menu): the word under the last right-click and its suggestions
+  onSpelling: (cb) => {
+    const handler = (_e, s) => cb(s);
+    ipcRenderer.on("spelling", handler);
+    return () => ipcRenderer.removeListener("spelling", handler);
+  },
+  replaceMisspelling: (word) => ipcRenderer.invoke("replace-misspelling", word),
+  addToDictionary: (word) => ipcRenderer.invoke("add-to-dictionary", word),
   // Menu
   onMenuAction: (cb) => {
     const handler = (_e, action) => cb(action);

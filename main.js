@@ -847,6 +847,10 @@ ipcMain.handle("open-data-folder", async () => { shell.openPath(userDataPath); }
 // Editor context-menu Paste. A native paste is delivered to the page as a paste event,
 // so it takes the same sanitizing path as Ctrl+V (including images).
 ipcMain.handle("paste", async (e) => { e.sender.paste(); });
+// The editor menu's spelling items. replaceMisspelling replaces the word Chromium found under
+// the right-click, as an edit of the page (it fires input, and Ctrl+Z undoes it).
+ipcMain.handle("replace-misspelling", async (e, word) => { e.sender.replaceMisspelling(String(word)); });
+ipcMain.handle("add-to-dictionary", async (_e, word) => session.defaultSession.addWordToSpellCheckerDictionary(String(word)));
 
 /* ═══════════════════════════════════════════════════════════════
    WINDOW
@@ -886,6 +890,14 @@ function createWindow() {
   mainWindow.webContents.on("will-redirect", (e) => e.preventDefault());
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  // Spelling: Chromium reports the misspelled word under a right-click only through this
+  // event, and only when the page lets its contextmenu event through (the editor shows its own
+  // menu without cancelling it; Electron has no menu of its own to show). webFrame's spelling
+  // calls can't stand in: with Windows' spellchecker they report every word as correct.
+  mainWindow.webContents.on("context-menu", (_e, p) => {
+    if (!p.isEditable) return;
+    mainWindow.webContents.send("spelling", { word: p.misspelledWord || "", suggestions: (p.dictionarySuggestions || []).slice(0, 5) });
+  });
 
   if (ws.maximized) mainWindow.maximize();
   mainWindow.loadFile("index.html");

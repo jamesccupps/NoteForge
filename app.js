@@ -1531,6 +1531,11 @@ function NoteForge() {
   const [editVal, setEditVal] = useState("");
   const [ctx, setCtx] = useState(null);
   const [edCtx, setEdCtx] = useState(null);
+  // The misspelled word under the editor menu's right-click, with Chromium's suggestions. It
+  // comes from main just after the contextmenu event (which is why the editor doesn't cancel
+  // that event): opening the menu clears it, and the message fills it in.
+  const [spell, setSpell] = useState(null);
+  useEffect(() => window.electronAPI?.onSpelling?.(s => setSpell(s)), []);
   const [stats, setStats] = useState({
     w: 0,
     c: 0,
@@ -4350,7 +4355,7 @@ function NoteForge() {
       else if (t.closest?.(".nf-check label")) e.preventDefault();
     },
     onContextMenu: e => {
-      e.preventDefault();
+      setSpell(null);
       setEdCtx({
         x: e.clientX,
         y: e.clientY
@@ -4512,8 +4517,9 @@ function NoteForge() {
       s: 13
     }), " Delete Notebook")));
   })(), edCtx && (() => {
+    const sp = spell?.word ? spell : null;
     const mx = Math.min(edCtx.x, window.innerWidth - 200);
-    const my = Math.min(edCtx.y, window.innerHeight - 320);
+    const my = Math.min(edCtx.y, window.innerHeight - 320 - (sp ? (Math.max(1, sp.suggestions.length) + 1) * 30 + 9 : 0));
     const hasSel = window.getSelection()?.toString()?.length > 0;
     const doCmd = cmd => {
       exec(cmd);
@@ -4531,7 +4537,29 @@ function NoteForge() {
         left: mx,
         top: my
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, sp && /*#__PURE__*/React.createElement(React.Fragment, null, sp.suggestions.length ? sp.suggestions.map(w => /*#__PURE__*/React.createElement("div", {
+      key: w,
+      className: "nf-ctx-item",
+      style: {
+        fontWeight: 600
+      },
+      dir: "auto",
+      onClick: () => {
+        edRef.current?.focus();
+        window.electronAPI.replaceMisspelling(w);
+        setEdCtx(null);
+      }
+    }, w)) : /*#__PURE__*/React.createElement("div", {
+      className: "nf-ctx-item disabled"
+    }, "No suggestions"), /*#__PURE__*/React.createElement("div", {
+      className: "nf-ctx-item",
+      onClick: () => {
+        window.electronAPI.addToDictionary(sp.word);
+        setEdCtx(null);
+      }
+    }, "Add to Dictionary"), /*#__PURE__*/React.createElement("div", {
+      className: "nf-ctx-sep"
+    })), /*#__PURE__*/React.createElement("div", {
       className: `nf-ctx-item${!hasSel ? " disabled" : ""}`,
       onClick: () => {
         if (hasSel) {
