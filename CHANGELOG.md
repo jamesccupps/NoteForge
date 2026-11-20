@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+### Changed
+- **Electron 45** (Chromium 156), from 44.11.1. Brings the newer browser engine's security fixes.
+- **DOMPurify 3.4.18**, the library that cleans pasted and loaded notes of anything that could run.
+- The app is now built with Babel 8. The built `app.js` is byte for byte what Babel 7 made.
+
 ## [2.10.0] — 2026-11-16
 
 Right-to-left writing, asked for in [#2](https://github.com/jamesccupps/NoteForge/issues/2), and word counts for languages written without spaces.
