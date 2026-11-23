@@ -10,20 +10,25 @@ const root = path.join(__dirname, "..", "..");
 const START = "let _dompurifyHookInstalled";
 const END = "/* ── Strip plaintext sections from ALL locked notebooks";
 
-function loadAppSanitizer() {
+// { dompurify: false } leaves DOMPurify off the window, as if lib/purify.min.js failed to
+// load. `errors` collects what the sanitizer logs with console.error.
+function loadAppSanitizer({ dompurify = true } = {}) {
   const dom = new JSDOM("<!DOCTYPE html><body></body>", { runScripts: "outside-only" });
-  dom.window.eval(fs.readFileSync(path.join(root, "lib", "purify.min.js"), "utf-8"));
-  if (typeof dom.window.DOMPurify?.sanitize !== "function") {
-    throw new Error("lib/purify.min.js did not define window.DOMPurify");
+  if (dompurify) {
+    dom.window.eval(fs.readFileSync(path.join(root, "lib", "purify.min.js"), "utf-8"));
+    if (typeof dom.window.DOMPurify?.sanitize !== "function") {
+      throw new Error("lib/purify.min.js did not define window.DOMPurify");
+    }
   }
   const src = fs.readFileSync(path.join(root, "app.jsx"), "utf-8");
   const start = src.indexOf(START), end = src.indexOf(END);
   if (start < 0 || end < start) {
     throw new Error("sanitizer markers not found in app.jsx; update test/helpers/sanitizer.js");
   }
-  const ctx = { window: dom.window };
+  const errors = [];
+  const ctx = { window: dom.window, console: { error: (...a) => errors.push(a.join(" ")) } };
   vm.runInNewContext(src.slice(start, end) + "\nthis.sanitizeHTML = sanitizeHTML;", ctx);
-  return { sanitizeHTML: ctx.sanitizeHTML, window: dom.window, version: dom.window.DOMPurify.version };
+  return { sanitizeHTML: ctx.sanitizeHTML, window: dom.window, version: dom.window.DOMPurify?.version, errors };
 }
 
 // Parse sanitized output and list anything that could execute, phish, or load a resource.

@@ -208,14 +208,12 @@ const sanitizeHTML=(html)=>{
       ALLOW_DATA_ATTR:false,
     });
   }
-  // Fallback if DOMPurify not loaded — strip obvious dangerous patterns
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi,"")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi,"")
-    .replace(/<object[\s\S]*?<\/object>/gi,"")
-    .replace(/<embed[\s\S]*?>/gi,"")
-    .replace(/\bon\w+\s*=/gi,"data-removed=")
-    .replace(/javascript\s*:/gi,"removed:");
+  // No DOMPurify (lib/purify.min.js missing or failed to load): fail closed. The regex
+  // cleaner that was here could be got round (an onerror without quotes, forms, meta
+  // refresh, <base>...), and notes render pasted HTML, so the whole string comes back
+  // escaped and shows as text.
+  console.error("NoteForge: the HTML sanitizer (DOMPurify) isn't loaded; showing this content as plain text");
+  return String(html).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 };
 
 /* ── Strip plaintext sections from ALL locked notebooks ────────

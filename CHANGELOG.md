@@ -5,6 +5,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versio
 
 ## [Unreleased]
 
+### Security
+- **The backup sanitizer fails closed.** If DOMPurify (bundled in `lib/`) ever failed to load, NoteForge fell back to a few regexes to clean notes and pasted HTML, and they could be got round: `<scr<script></script>ipt>` came out as a working `<script>`, a `javascript:` link written as `jav&#x61;script:` passed untouched, and forms with password boxes, `<meta>` refresh and `<base>` weren't touched at all. That fallback now escapes the whole note so it shows as plain text, and logs that the sanitizer is missing. With DOMPurify loaded, as it always is in a normal install, nothing changes. (Code scanning alerts #13–18.)
+
 ## [2.11.0] — 2026-11-20
 
 Locks when Windows does, spelling corrections on right-click, faster typing in big sections, and Electron 45.

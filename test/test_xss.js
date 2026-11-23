@@ -119,6 +119,32 @@ for (const [href, keep] of [["https://example.com/", true], ["http://example.com
   t(`link href "${href}" ${keep ? "kept" : "removed"}`, /href=/.test(c) === keep, c);
 }
 
+// Without DOMPurify the sanitizer used to fall back to four regexes, which could be got
+// round (code scanning #13-18). It now fails closed: the whole string comes back escaped,
+// so it shows as text, and the missing sanitizer is logged.
+console.log("\n=== WITHOUT DOMPURIFY (fails closed) ===");
+{
+  const bare = loadAppSanitizer({ dompurify: false });
+  const asText = (html) => { const d = window.document.createElement("div"); d.innerHTML = html; return d.children.length === 0 ? d.textContent : null; };
+  const payload = "<img src=x onerror=alert(1)>";
+  const out = bare.sanitizeHTML(payload);
+  t("DOMPurify missing: <img src=x onerror=alert(1)> comes back as escaped text", out === "&lt;img src=x onerror=alert(1)&gt;", out);
+  t("...which shows as that text, with no element in it", asText(out) === payload, out);
+  t(`...& < > " ' all escaped`, bare.sanitizeHTML(`a&b<c>"d'e`) === "a&amp;b&lt;c&gt;&quot;d&#39;e", bare.sanitizeHTML(`a&b<c>"d'e`));
+  // the two shapes the old regexes got wrong: a script tag split by another (removing the
+  // inner one joined the outer), and an entity-encoded javascript: link
+  for (const [html, label] of [...vectors,
+    ["<scr<script></script>ipt>alert(1)</scr<script></script>ipt>", "nested script tags"],
+    ['<a href="jav&#x61;script:alert(1)">x</a>', "entity-encoded javascript: href"]]) {
+    const o = bare.sanitizeHTML(html);
+    t(`fallback, ${label}: plain text only`, asText(o) === html, o);
+  }
+  t("...and the missing sanitizer is logged", bare.errors.length > 0 && /DOMPurify/.test(bare.errors[0]), JSON.stringify(bare.errors));
+  const normal = loadAppSanitizer();
+  normal.sanitizeHTML('<p>x</p><img src=x onerror=alert(1)>');
+  t("with DOMPurify loaded, nothing is logged", normal.errors.length === 0, JSON.stringify(normal.errors));
+}
+
 console.log("\n=== Summary ===");
 console.log(`  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
